@@ -170,7 +170,7 @@ describe("resolveBundledPluginsDir", () => {
       },
     ],
     [
-      "prefers source extensions in a git checkout even without vitest env",
+      "prefers the staged runtime tree in a git checkout outside vitest",
       {
         prefix: "openclaw-bundled-dir-git-",
         hasExtensions: true,
@@ -180,7 +180,7 @@ describe("resolveBundledPluginsDir", () => {
         hasGitCheckout: true,
       },
       {
-        expectedRelativeDir: "extensions",
+        expectedRelativeDir: path.join("dist-runtime", "extensions"),
       },
     ],
   ] as const)("%s", (_name, layout, expectation) => {
