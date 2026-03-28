@@ -35,6 +35,7 @@ import { type FeishuPermissionError, resolveFeishuSenderName } from "./bot-sende
 import { createFeishuClient } from "./client.js";
 import { finalizeFeishuMessageProcessing, tryRecordMessagePersistent } from "./dedup.js";
 import { maybeCreateDynamicAgent } from "./dynamic-agent.js";
+import { maybeHandleJiuyanFeishuDirectOps } from "./jiuyan-data-ops.js";
 import { extractMentionTargets, isMentionForwardRequest } from "./mention.js";
 import {
   resolveFeishuGroupConfig,
@@ -45,7 +46,7 @@ import {
 import { createFeishuReplyDispatcher } from "./reply-dispatcher.js";
 import { getFeishuRuntime } from "./runtime.js";
 import { getMessageFeishu, listFeishuThreadMessages, sendMessageFeishu } from "./send.js";
-import type { FeishuMessageContext, FeishuMessageInfo } from "./types.js";
+import type { FeishuMediaInfo, FeishuMessageContext, FeishuMessageInfo } from "./types.js";
 import type { DynamicAgentCreationConfig } from "./types.js";
 
 export { toMessageResourceType } from "./bot-content.js";
@@ -728,6 +729,7 @@ export async function handleFeishuMessage(params: {
     // Fetch quoted/replied message content if parentId exists
     let quotedMessageInfo: Awaited<ReturnType<typeof getMessageFeishu>> = null;
     let quotedContent: string | undefined;
+    let quotedMediaList: FeishuMediaInfo[] = [];
     if (ctx.parentId) {
       try {
         quotedMessageInfo = await getMessageFeishu({
@@ -748,6 +750,15 @@ export async function handleFeishuMessage(params: {
           log(
             `feishu[${account.accountId}]: fetched quoted message: ${quotedContent?.slice(0, 100)}`,
           );
+          quotedMediaList = await resolveFeishuMediaList({
+            cfg,
+            messageId: quotedMessageInfo.messageId,
+            messageType: quotedMessageInfo.contentType,
+            content: quotedMessageInfo.rawContent ?? quotedMessageInfo.content,
+            maxBytes: mediaMaxBytes,
+            log,
+            accountId: account.accountId,
+          });
         } else if (quotedMessageInfo) {
           log(
             `feishu[${account.accountId}]: skipped quoted message from sender ${quotedMessageInfo.senderId ?? "unknown"} due to group sender allowlist`,
@@ -762,6 +773,47 @@ export async function handleFeishuMessage(params: {
       isGroup &&
       (groupSession?.groupSessionScope === "group_topic" ||
         groupSession?.groupSessionScope === "group_topic_sender");
+    const configReplyInThread =
+      isGroup &&
+      (groupConfig?.replyInThread ?? feishuCfg?.replyInThread ?? "disabled") === "enabled";
+    const replyTargetMessageId =
+      isTopicSessionForThread || configReplyInThread
+        ? (ctx.rootId ?? ctx.messageId)
+        : ctx.messageId;
+    const threadReply = isGroup ? (groupSession?.threadReply ?? false) : false;
+
+    try {
+      const handledJiuyanExport = await maybeHandleJiuyanFeishuDirectOps({
+        cfg,
+        accountId: account.accountId,
+        messageText: ctx.content,
+        chatId: ctx.chatId,
+        replyToMessageId: replyTargetMessageId,
+        replyInThread: isGroup ? (groupSession?.replyInThread ?? false) : false,
+        mediaList,
+        quotedMediaList,
+        log,
+      });
+      if (handledJiuyanExport) {
+        log(`feishu[${account.accountId}]: Jiuyan export handled directly`);
+        return;
+      }
+    } catch (err) {
+      const errorText = err instanceof Error ? err.message : String(err);
+      await sendMessageFeishu({
+        cfg,
+        to: `chat:${ctx.chatId}`,
+        text: `Jiuyan 导出失败：${errorText}`,
+        replyToMessageId: replyTargetMessageId,
+        replyInThread: isGroup ? (groupSession?.replyInThread ?? false) : false,
+        accountId: account.accountId,
+      }).catch((sendErr) => {
+        log(
+          `feishu[${account.accountId}]: failed to send Jiuyan export error reply: ${String(sendErr)}`,
+        );
+      });
+      return;
+    }
 
     const envelopeOptions = core.channel.reply.resolveEnvelopeFormatOptions(cfg);
     const messageBody = buildFeishuAgentBody({
@@ -1021,16 +1073,7 @@ export async function handleFeishuMessage(params: {
     // - Normal groups (auto-detected threadReply from root_id): reply to the
     //   triggering message itself. Using rootId here would silently push the
     //   reply into a topic thread invisible in the main chat view (#32980).
-    const isTopicSession =
-      isGroup &&
-      (groupSession?.groupSessionScope === "group_topic" ||
-        groupSession?.groupSessionScope === "group_topic_sender");
-    const configReplyInThread =
-      isGroup &&
-      (groupConfig?.replyInThread ?? feishuCfg?.replyInThread ?? "disabled") === "enabled";
-    const replyTargetMessageId =
-      isTopicSession || configReplyInThread ? (ctx.rootId ?? ctx.messageId) : ctx.messageId;
-    const threadReply = isGroup ? (groupSession?.threadReply ?? false) : false;
+    const isTopicSession = isTopicSessionForThread;
 
     if (broadcastAgents) {
       // Cross-account dedup: in multi-account setups, Feishu delivers the same

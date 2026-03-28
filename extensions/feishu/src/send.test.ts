@@ -226,6 +226,7 @@ describe("getMessageFeishu", () => {
         chatId: "oc_file",
         contentType: "file",
         content: "[file message]",
+        rawContent: JSON.stringify({ file_key: "file_v3_123" }),
       }),
     );
   });
@@ -313,6 +314,7 @@ describe("getMessageFeishu", () => {
         messageId: "om_file",
         contentType: "file",
         content: "[file message]",
+        rawContent: JSON.stringify({ file_key: "file_v3_123" }),
       }),
       expect.objectContaining({
         messageId: "om_card",
