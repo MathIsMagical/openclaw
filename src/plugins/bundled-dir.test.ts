@@ -238,7 +238,7 @@ describe("resolveBundledPluginsDir", () => {
         hasGitCheckout: true,
       },
       {
-        expectedRelativeDir: "extensions",
+        expectedRelativeDir: path.join("dist-runtime", "extensions"),
       },
     ],
   ] as const)("%s", (_name, layout, expectation) => {
