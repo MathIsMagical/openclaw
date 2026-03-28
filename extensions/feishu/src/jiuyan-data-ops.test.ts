@@ -1,0 +1,64 @@
+import { describe, expect, it, vi } from "vitest";
+vi.mock("../../../src/config/bundled-channel-config-runtime.js", () => ({
+  getBundledChannelConfigSchemaMap: () => new Map(),
+  getBundledChannelRuntimeMap: () => new Map(),
+}));
+
+import { parseJiuyanExportIntent, parseJiuyanImportIntent } from "./jiuyan-data-ops-intent.js";
+
+describe("parseJiuyanExportIntent", () => {
+  it("parses months and default top scope from /生产计划 commands", () => {
+    expect(parseJiuyanExportIntent("/生产计划 计算未来 5 个月需求 top 100 SKU")).toEqual({
+      prefix: "/生产计划",
+      months: 5,
+      yesterdayTop: 100,
+      fileScope: false,
+    });
+  });
+
+  it("parses last-month scope from /销量计算 commands", () => {
+    expect(
+      parseJiuyanExportIntent("/销量计算 更新上个月 top 800 sku，未来 6 个月生产计划表"),
+    ).toEqual({
+      prefix: "/销量计算",
+      months: 6,
+      lastMonthTop: 800,
+      fileScope: false,
+    });
+  });
+
+  it("marks 表中 sku commands as file-scope exports", () => {
+    expect(parseJiuyanExportIntent("/生产计划 更新表中 sku，未来 6 个月的生产计划表")).toEqual({
+      prefix: "/生产计划",
+      months: 6,
+      fileScope: true,
+    });
+  });
+
+  it("accepts formula-prefixed export commands", () => {
+    expect(parseJiuyanExportIntent("/公式计算 计算未来 5 个月需求")).toEqual({
+      prefix: "/公式计算",
+      months: 5,
+      fileScope: false,
+    });
+    expect(parseJiuyanExportIntent("/公式预测销量 计算未来 5 个月销量")).toEqual({
+      prefix: "/公式预测销量",
+      months: 5,
+      fileScope: false,
+    });
+  });
+
+  it("ignores unrelated commands without Jiuyan export intent", () => {
+    expect(parseJiuyanExportIntent("/生产计划 hi")).toBeNull();
+    expect(parseJiuyanExportIntent("计算需求")).toBeNull();
+  });
+
+  it("parses Jiuyan import command prefixes", () => {
+    expect(parseJiuyanImportIntent("/导入数据库")).toEqual({ prefix: "/导入数据库" });
+    expect(parseJiuyanImportIntent("/数据库更新 导入今天文件")).toEqual({
+      prefix: "/数据库更新",
+    });
+    expect(parseJiuyanImportIntent("/更新")).toEqual({ prefix: "/更新" });
+    expect(parseJiuyanImportIntent("导入数据库")).toBeNull();
+  });
+});
