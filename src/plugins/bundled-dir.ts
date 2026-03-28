@@ -56,8 +56,9 @@ function resolveBundledDirFromPackageRoot(
     return sourceExtensionsDir;
   }
   // Local source checkouts stage a runtime-complete bundled plugin tree under
-  // dist-runtime/. Prefer that over source extensions only when the paired
-  // dist/ tree exists; otherwise wrappers can drift ahead of the last build.
+  // dist-runtime/. Prefer that in normal runtime, and reserve source entries
+  // for explicit dev/test flows so packaged apps do not mix TS entrypoints with
+  // built plugin-sdk surfaces in the same process.
   const runtimeExtensionsDir = path.join(packageRoot, "dist-runtime", "extensions");
   const hasUsableRuntimeTree = sourceCheckout
     ? hasUsableBundledPluginTree(runtimeExtensionsDir)
