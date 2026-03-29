@@ -48,6 +48,17 @@ describe("parseJiuyanExportIntent", () => {
     });
   });
 
+  it("treats bare export prefixes as default exports", () => {
+    expect(parseJiuyanExportIntent("/生产计划")).toEqual({
+      prefix: "/生产计划",
+      fileScope: false,
+    });
+    expect(parseJiuyanExportIntent("/公式预测")).toEqual({
+      prefix: "/公式预测",
+      fileScope: false,
+    });
+  });
+
   it("ignores unrelated commands without Jiuyan export intent", () => {
     expect(parseJiuyanExportIntent("/生产计划 hi")).toBeNull();
     expect(parseJiuyanExportIntent("计算需求")).toBeNull();
