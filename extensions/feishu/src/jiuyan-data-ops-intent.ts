@@ -52,6 +52,7 @@ export function parseJiuyanExportIntent(messageText: string): JiuyanExportIntent
   const remainder = trimmed.slice(prefix.length).trim();
   const normalized = normalizeSkuToken(remainder);
   const hasExportIntent =
+    normalized.length === 0 ||
     /计算需求|更新生产计划表|更新生产计划|计算销量/i.test(normalized) ||
     /top\s*\d+\s*sku/i.test(normalized) ||
     /表中\s*sku/i.test(normalized) ||
