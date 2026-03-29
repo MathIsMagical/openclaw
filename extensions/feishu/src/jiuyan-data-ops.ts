@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ClawdbotConfig } from "../runtime-api.js";
@@ -17,13 +18,13 @@ const JIUYAN_UTILS_DIR = path.join(JIUYAN_ROOT, "utils");
 const JIUYAN_EXPORTS_DIR = path.join(JIUYAN_ROOT, "exports");
 const JIUYAN_SCOPE_INPUT_DIR = path.join(JIUYAN_EXPORTS_DIR, "_scope_inputs");
 const JIUYAN_UPLOAD_DIR = path.join(JIUYAN_ROOT, "upload");
-const JIUYAN_VENV_PYTHON = path.join(
-  JIUYAN_ROOT,
-  "sales_filtered_database",
-  ".venv",
-  "bin",
-  "python",
-);
+const JIUYAN_VENV_PYTHON_CANDIDATES = [
+  path.join(JIUYAN_ROOT, ".venv", "bin", "python"),
+  path.join(JIUYAN_ROOT, "sales_filtered_database", ".venv", "bin", "python"),
+] as const;
+const JIUYAN_VENV_PYTHON =
+  JIUYAN_VENV_PYTHON_CANDIDATES.find((candidate) => existsSync(candidate)) ??
+  JIUYAN_VENV_PYTHON_CANDIDATES[0];
 const CLEAR_FOLDERS_SCRIPT = path.join(JIUYAN_UTILS_DIR, "clear_folders.py");
 const SELECT_EXPORT_SKUS_SCRIPT = path.join(JIUYAN_UTILS_DIR, "select_export_skus.py");
 const EXPORT_FORECAST_SCRIPT = path.join(JIUYAN_UTILS_DIR, "export_forecast.py");
