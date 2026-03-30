@@ -37,6 +37,54 @@ type ShellCommandResult = {
   combined: string;
 };
 
+type JiuyanDocUpdate = {
+  file: string;
+  count: number;
+  items?: string[];
+};
+
+type JiuyanSalesImportSummary = {
+  kind: "sales";
+  file_rows: number;
+  file_sku_count: number;
+  file_date_range?: {
+    start?: string | null;
+    end?: string | null;
+  };
+  new_rows: number;
+  new_sku_count: number;
+  updated_rows: number;
+  new_sales_volume: number;
+  new_date_range?: {
+    start?: string | null;
+    end?: string | null;
+  };
+  new_sku_sales?: Array<{
+    barcode: string;
+    family: string;
+    sales_volume: number;
+  }>;
+  doc_updates?: JiuyanDocUpdate[];
+};
+
+type JiuyanSkusImportSummary = {
+  kind: "skus";
+  processed_rows: number;
+  inventory_updated_sku_count: number;
+  new_sku_count: number;
+  updated_sku_count: number;
+  invalid_barcode_count?: number;
+  filtered_out_by_category_count?: number;
+  new_skus?: Array<{
+    barcode: string;
+    name: string;
+    family: string;
+  }>;
+  doc_updates?: JiuyanDocUpdate[];
+};
+
+type JiuyanImportSummary = JiuyanSalesImportSummary | JiuyanSkusImportSummary;
+
 function shellEscape(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
@@ -147,18 +195,105 @@ function summarizeImportOutput(output: string): string[] {
     );
 }
 
-function buildImportFailureSummary(outputs: readonly string[]): string {
-  const hints = outputs
-    .flatMap((output) =>
-      output
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter((line) => line.startsWith("❌") || line.startsWith("⚠️")),
-    )
-    .slice(0, 4);
-  return hints.length > 0
-    ? `文件不合法，无法导入 Jiuyan 数据库。\n${hints.join("\n")}`
-    : "文件不合法，无法导入 Jiuyan 数据库。";
+function extractImportSummary(output: string): JiuyanImportSummary | null {
+  const marker = "OPENCLAW_IMPORT_SUMMARY:";
+  const summaryLine = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .reverse()
+    .find((line) => line.startsWith(marker));
+  if (!summaryLine) {
+    return null;
+  }
+  try {
+    return JSON.parse(summaryLine.slice(marker.length)) as JiuyanImportSummary;
+  } catch {
+    return null;
+  }
+}
+
+function formatDocUpdateLines(docUpdates: readonly JiuyanDocUpdate[] | undefined): string[] {
+  return (docUpdates ?? []).map((update) => {
+    const preview = (update.items ?? []).slice(0, 8).join("、");
+    const suffix =
+      update.items && update.items.length > 8
+        ? ` 等 ${update.count} 项`
+        : preview
+          ? `：${preview}`
+          : "";
+    return `- 已更新 ${update.file}：${update.count} 项${suffix}`;
+  });
+}
+
+function buildSalesImportSuccessMessage(summary: JiuyanSalesImportSummary): string {
+  const lines = ["销售数据更新成功！", `新增 SKU：${summary.new_sku_count} 个`];
+  const newSkuSales = summary.new_sku_sales ?? [];
+  if (newSkuSales.length > 0) {
+    lines.push("新增 SKU 列表：");
+    for (const item of newSkuSales.slice(0, 12)) {
+      lines.push(`${item.barcode} | ${item.family} | ${item.sales_volume}`);
+    }
+    if (newSkuSales.length > 12) {
+      lines.push(`其余 ${newSkuSales.length - 12} 个 SKU 已省略`);
+    }
+  }
+  lines.push(`新增销售记录：${summary.new_rows} 条`);
+  lines.push(
+    summary.new_date_range?.start || summary.new_date_range?.end
+      ? `新增时间范围：${summary.new_date_range?.start ?? "未知"} ~ ${summary.new_date_range?.end ?? "未知"}`
+      : "新增时间范围：无新增数据",
+  );
+  lines.push(`文件包含 SKU：${summary.file_sku_count} 个`);
+  lines.push(`文件包含销售记录：${summary.file_rows} 条`);
+  lines.push(
+    summary.file_date_range?.start || summary.file_date_range?.end
+      ? `文件时间范围：${summary.file_date_range?.start ?? "未知"} ~ ${summary.file_date_range?.end ?? "未知"}`
+      : "文件时间范围：未知",
+  );
+  lines.push(...formatDocUpdateLines(summary.doc_updates));
+  return lines.join("\n");
+}
+
+function buildSkusImportSuccessMessage(summary: JiuyanSkusImportSummary): string {
+  const lines = [
+    `${summary.inventory_updated_sku_count} 个 SKU 的库存和在途数据更新成功！`,
+    `- 其中新增 ${summary.new_sku_count} 个 SKU，更新已有 ${summary.updated_sku_count} 个 SKU`,
+  ];
+  if (summary.filtered_out_by_category_count) {
+    lines.push(`- 分类过滤掉 ${summary.filtered_out_by_category_count} 条记录`);
+  }
+  if (summary.invalid_barcode_count) {
+    lines.push(`- 非法条码过滤掉 ${summary.invalid_barcode_count} 条记录`);
+  }
+  const newSkus = summary.new_skus ?? [];
+  if (newSkus.length > 0) {
+    lines.push("- 新增 SKU 列表：");
+    for (const item of newSkus.slice(0, 12)) {
+      lines.push(`  ${item.barcode} | ${item.family} | ${item.name}`);
+    }
+    if (newSkus.length > 12) {
+      lines.push(`  其余 ${newSkus.length - 12} 个 SKU 已省略`);
+    }
+  }
+  lines.push(...formatDocUpdateLines(summary.doc_updates));
+  return lines.join("\n");
+}
+
+function buildImportFailureSummary(results: { salesOutput: string; skusOutput: string }): string {
+  const lines = ["文件中缺少必要的数据字段，无法导入。"];
+  const salesHasSalesOnly = results.salesOutput.includes("销售数量/净销量/销量");
+  lines.push("销售数据导入：");
+  lines.push(
+    "- 必选字段：店铺、省份、城市、日期、商品编码、商品名称、产品分类、基本售价、市场吊牌价、所属站点、销售数量/净销量/销量、已付金额/支付金额/净销售额/销售金额",
+  );
+  lines.push("- 可选字段：实际可用数、采购在途");
+  if (salesHasSalesOnly) {
+    lines.push("- 说明：不接受只有“销售单数”但没有“销售数量/净销量/销量”的文件");
+  }
+  lines.push("库存数据导入：");
+  lines.push("- 必选字段：商品编码、商品名/商品名称、产品分类/商品分类、实际可用数、采购在途");
+  lines.push("- 可选字段：供应商、基本售价/基础售价、市场|吊牌价/市场吊牌价/吊牌价、商品创建日期");
+  return lines.join("\n");
 }
 
 async function maybeHandleJiuyanFeishuDirectImport(params: {
@@ -179,6 +314,13 @@ async function maybeHandleJiuyanFeishuDirectImport(params: {
 
   params.log?.(`feishu[${params.accountId ?? "default"}]: handling Jiuyan import directly`);
 
+  await sendMessageFeishu({
+    cfg: params.cfg,
+    to: `chat:${params.chatId}`,
+    text: "文件已收到，正在准备导入数据，导入完成后会提醒你。",
+    accountId: params.accountId,
+  });
+
   const importSourceMedia = [...params.mediaList, ...(params.quotedMediaList ?? [])];
   const stagedFiles = await stageImportInputFiles(importSourceMedia);
   if (stagedFiles.length === 0) {
@@ -197,12 +339,17 @@ async function maybeHandleJiuyanFeishuDirectImport(params: {
   const skusResult = await runShellCommand(buildJiuyanPythonCommand([IMPORT_SKUS_SCRIPT]));
   const salesOk = importOutputLooksSuccessful(salesResult.combined, "sales");
   const skusOk = importOutputLooksSuccessful(skusResult.combined, "skus");
+  const salesSummary = extractImportSummary(salesResult.combined);
+  const skusSummary = extractImportSummary(skusResult.combined);
 
   if (!salesOk && !skusOk) {
     await sendMessageFeishu({
       cfg: params.cfg,
       to: `chat:${params.chatId}`,
-      text: buildImportFailureSummary([salesResult.combined, skusResult.combined]),
+      text: buildImportFailureSummary({
+        salesOutput: salesResult.combined,
+        skusOutput: skusResult.combined,
+      }),
       replyToMessageId: params.replyToMessageId,
       replyInThread: params.replyInThread,
       accountId: params.accountId,
@@ -210,18 +357,21 @@ async function maybeHandleJiuyanFeishuDirectImport(params: {
     return true;
   }
 
-  const summaryLines = [
-    `${intent.prefix} 已完成。`,
-    ...new Set(
-      [salesResult.combined, skusResult.combined]
-        .flatMap((output) => summarizeImportOutput(output))
-        .slice(0, 12),
-    ),
-  ];
+  const summaryLines = [];
+  if (salesOk && salesSummary?.kind === "sales") {
+    summaryLines.push(buildSalesImportSuccessMessage(salesSummary));
+  } else if (salesOk) {
+    summaryLines.push(...summarizeImportOutput(salesResult.combined).slice(0, 12));
+  }
+  if (skusOk && skusSummary?.kind === "skus") {
+    summaryLines.push(buildSkusImportSuccessMessage(skusSummary));
+  } else if (skusOk) {
+    summaryLines.push(...summarizeImportOutput(skusResult.combined).slice(0, 12));
+  }
   await sendMessageFeishu({
     cfg: params.cfg,
     to: `chat:${params.chatId}`,
-    text: summaryLines.join("\n"),
+    text: summaryLines.join("\n\n"),
     replyToMessageId: params.replyToMessageId,
     replyInThread: params.replyInThread,
     accountId: params.accountId,
@@ -287,16 +437,26 @@ export async function maybeHandleJiuyanFeishuDirectExport(params: {
   quotedMediaList?: readonly FeishuMediaInfo[];
   log?: (message: string) => void;
 }): Promise<boolean> {
-  const intent = parseJiuyanExportIntent(params.messageText);
+  const scopeSourceMedia = [...params.mediaList, ...(params.quotedMediaList ?? [])];
+  const hasDefaultScopeFile = scopeSourceMedia.some((media) => isScopeInputFile(media.path));
+  const intent = parseJiuyanExportIntent(params.messageText, {
+    defaultFileScope: hasDefaultScopeFile,
+  });
   if (!intent) {
     return false;
   }
 
   params.log?.(`feishu[${params.accountId ?? "default"}]: handling Jiuyan export directly`);
 
+  await sendMessageFeishu({
+    cfg: params.cfg,
+    to: `chat:${params.chatId}`,
+    text: "正在准备生产计划，完成后立刻会把结果文件发给你。",
+    accountId: params.accountId,
+  });
+
   await runShellCommand(buildJiuyanPythonCommand([CLEAR_FOLDERS_SCRIPT, "--exports"]));
 
-  const scopeSourceMedia = [...params.mediaList, ...(params.quotedMediaList ?? [])];
   const stagedScopeFiles = intent.fileScope ? await stageScopeInputFiles(scopeSourceMedia) : [];
   if (intent.fileScope && stagedScopeFiles.length === 0) {
     await sendMessageFeishu({
