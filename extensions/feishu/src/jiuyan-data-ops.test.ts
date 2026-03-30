@@ -14,6 +14,11 @@ describe("parseJiuyanExportIntent", () => {
       yesterdayTop: 100,
       fileScope: false,
     });
+    expect(parseJiuyanExportIntent("/生产计划 top 50")).toEqual({
+      prefix: "/生产计划",
+      yesterdayTop: 50,
+      fileScope: false,
+    });
   });
 
   it("parses last-month scope from /销量计算 commands", () => {
@@ -32,6 +37,17 @@ describe("parseJiuyanExportIntent", () => {
       prefix: "/生产计划",
       months: 6,
       fileScope: true,
+    });
+  });
+
+  it("defaults bare /生产计划 with a referenced file to file-scope exports", () => {
+    expect(parseJiuyanExportIntent("/生产计划", { defaultFileScope: true })).toEqual({
+      prefix: "/生产计划",
+      fileScope: true,
+    });
+    expect(parseJiuyanExportIntent("/公式预测", { defaultFileScope: true })).toEqual({
+      prefix: "/公式预测",
+      fileScope: false,
     });
   });
 
