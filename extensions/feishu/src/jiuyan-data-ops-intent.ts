@@ -102,3 +102,9 @@ export function parseJiuyanImportIntent(messageText: string): JiuyanImportIntent
   }
   return { prefix };
 }
+
+export function hasJiuyanDirectOpsCommand(messageText: string): boolean {
+  return (
+    parseJiuyanImportIntent(messageText) !== null || parseJiuyanExportIntent(messageText) !== null
+  );
+}
