@@ -794,6 +794,7 @@ export async function handleFeishuMessage(params: {
         chatId: ctx.chatId,
         replyToMessageId: replyTargetMessageId,
         replyInThread: isGroup ? (groupSession?.replyInThread ?? false) : false,
+        commandAuthorized,
         mediaList,
         quotedMediaList,
         log,
