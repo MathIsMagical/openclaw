@@ -543,10 +543,14 @@ export async function maybeHandleJiuyanFeishuDirectOps(params: {
   chatId: string;
   replyToMessageId: string;
   replyInThread: boolean;
+  commandAuthorized?: boolean;
   mediaList: readonly FeishuMediaInfo[];
   quotedMediaList?: readonly FeishuMediaInfo[];
   log?: (message: string) => void;
 }): Promise<boolean> {
+  if (params.commandAuthorized === false) {
+    return false;
+  }
   if (await maybeHandleJiuyanFeishuDirectImport(params)) {
     return true;
   }
