@@ -77,6 +77,10 @@ type JiuyanSalesImportSummary = {
     family: string;
     sales_volume: number;
   }>;
+  skipped_new_skus?: Array<{
+    barcode: string;
+    reason: string;
+  }>;
   doc_updates?: JiuyanDocUpdate[];
 };
 
@@ -218,6 +222,17 @@ function formatDocUpdateLines(docUpdates: readonly JiuyanDocUpdate[] | undefined
 
 function buildSalesImportSuccessMessage(summary: JiuyanSalesImportSummary): string {
   const lines = ["销售数据更新成功！", `新增 SKU：${summary.new_sku_count} 个`];
+  const skippedNewSkus = summary.skipped_new_skus ?? [];
+  if (skippedNewSkus.length > 0) {
+    lines.push(`跳过新增 SKU：${skippedNewSkus.length} 个`);
+    lines.push("跳过条码列表：");
+    for (const item of skippedNewSkus.slice(0, 20)) {
+      lines.push(`${item.barcode} | ${item.reason}`);
+    }
+    if (skippedNewSkus.length > 20) {
+      lines.push(`其余 ${skippedNewSkus.length - 20} 个条码已省略`);
+    }
+  }
   const newSkuSales = summary.new_sku_sales ?? [];
   if (newSkuSales.length > 0) {
     lines.push("新增 SKU 列表：");
