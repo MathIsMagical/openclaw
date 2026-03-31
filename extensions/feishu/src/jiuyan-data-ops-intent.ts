@@ -40,18 +40,23 @@ const JIUYAN_IMPORT_PREFIXES = [
 const JIUYAN_EXPORT_PREFIXES = [
   "/生产计划",
   "/销量计算",
-  "/公式计算",
-  "/公式预测",
   "/公式预测销量",
   "/公式计算销量",
+  "/公式计算",
+  "/公式预测",
 ] as const;
+const JIUYAN_EXPORT_PREFIXES_BY_LENGTH = [...JIUYAN_EXPORT_PREFIXES].sort(
+  (left, right) => right.length - left.length,
+);
 
 export function parseJiuyanExportIntent(
   messageText: string,
   options: ParseJiuyanExportIntentOptions = {},
 ): JiuyanExportIntent | null {
   const trimmed = messageText.trim();
-  const prefix = JIUYAN_EXPORT_PREFIXES.find((candidate) => trimmed.startsWith(candidate));
+  const prefix = JIUYAN_EXPORT_PREFIXES_BY_LENGTH.find((candidate) =>
+    trimmed.startsWith(candidate),
+  );
   if (!prefix) {
     return null;
   }

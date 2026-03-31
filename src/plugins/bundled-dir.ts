@@ -23,6 +23,9 @@ function resolveBundledDirFromPackageRoot(
   // for explicit dev/test flows so packaged apps do not mix TS entrypoints with
   // built plugin-sdk surfaces in the same process.
   const runtimeExtensionsDir = path.join(packageRoot, "dist-runtime", "extensions");
+  if (preferSourceCheckout && fs.existsSync(sourceExtensionsDir)) {
+    return sourceExtensionsDir;
+  }
   if (fs.existsSync(runtimeExtensionsDir) && fs.existsSync(builtExtensionsDir)) {
     return runtimeExtensionsDir;
   }

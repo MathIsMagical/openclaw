@@ -5,6 +5,7 @@ vi.mock("../../../src/config/bundled-channel-config-runtime.js", () => ({
 }));
 
 import { parseJiuyanExportIntent, parseJiuyanImportIntent } from "./jiuyan-data-ops-intent.js";
+import { maybeHandleJiuyanFeishuDirectOps } from "./jiuyan-data-ops.js";
 
 describe("parseJiuyanExportIntent", () => {
   it("parses months and default top scope from /生产计划 commands", () => {
@@ -87,5 +88,21 @@ describe("parseJiuyanExportIntent", () => {
     });
     expect(parseJiuyanImportIntent("/更新")).toEqual({ prefix: "/更新" });
     expect(parseJiuyanImportIntent("导入数据库")).toBeNull();
+  });
+});
+
+describe("maybeHandleJiuyanFeishuDirectOps", () => {
+  it("does not run direct Jiuyan handlers when command authorization denies commands", async () => {
+    await expect(
+      maybeHandleJiuyanFeishuDirectOps({
+        cfg: {} as never,
+        messageText: "/生产计划",
+        chatId: "oc_test_chat",
+        replyToMessageId: "om_test_msg",
+        replyInThread: false,
+        commandAuthorized: false,
+        mediaList: [],
+      }),
+    ).resolves.toBe(false);
   });
 });
