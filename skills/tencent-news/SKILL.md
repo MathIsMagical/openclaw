@@ -18,6 +18,14 @@ tags: [news, tencent, headlines, briefings, news rankings, real-time updates]
 
 所有平台统一通过 `bun` 运行 TypeScript 脚本，不依赖 Node.js、Python 或平台特定 Shell。
 
+### 执行约束
+
+- 本 skill 的目录固定为 `/Users/andychan/Documents/openclaw/skills/tencent-news`。
+- 运行脚本时，始终把 `cwd` 设为 `/Users/andychan/Documents/openclaw/skills/tencent-news`。
+- 不要使用 `cd ... && <command>` 包装命令。
+- 不要把 `~/Documents/openclaw/skills/tencent-news` 作为 `workdir` 传给工具；这里必须使用上面的绝对路径。
+- 脚本命令保持为直接执行形式，例如 `bun scripts/cli-state.ts`，由 `cwd` 决定相对路径解析。
+
 ### 前置：确保 bun 可用
 
 执行任何脚本之前，先检测 `bun` 是否可用：`bun --version`。若不可用，安装 bun：
@@ -37,20 +45,23 @@ powershell -c "irm bun.sh/install.ps1 | iex"
 安装后若当前终端找不到 `bun`，需重启终端或手动刷新 PATH，再次 `bun --version` 确认。
 
 1. **运行状态检查**
+   在 `cwd=/Users/andychan/Documents/openclaw/skills/tencent-news` 下执行：
    `bun scripts/cli-state.ts`
    解析返回 JSON，重点关注 `platform.cliPath`、`platform.helpCommand`、`cliExists`、`needsUpdateCheck`、`apiKey.present`。
 
 2. **安装 CLI**（`cliExists` 为 `false` 时）
+   在 `cwd=/Users/andychan/Documents/openclaw/skills/tencent-news` 下执行：
    `bun scripts/install-cli.ts`
    若脚本失败，阅读 [`references/installation-guide.md`](references/installation-guide.md)。
 
 3. **更新 CLI**（`needsUpdateCheck` 为 `true`，或 CLI 提示版本过旧时）
+   在 `cwd=/Users/andychan/Documents/openclaw/skills/tencent-news` 下执行：
    `bun scripts/check-update.ts --apply`
    脚本内部通过 `version` 判断是否有新版本，有则下载覆盖，无则跳过。
 
 4. **配置 API Key**（`apiKey.present` 为 `false` 时）
-   检查：`bun scripts/api-key.ts`
-   设置：`bun scripts/api-key.ts --set KEY`
+   检查：在 `cwd=/Users/andychan/Documents/openclaw/skills/tencent-news` 下执行 `bun scripts/api-key.ts`
+   设置：在 `cwd=/Users/andychan/Documents/openclaw/skills/tencent-news` 下执行 `bun scripts/api-key.ts --set KEY`
    - 解析返回 JSON 中 `apiKey` 部分，按以下优先级恢复 Key：
      1. `apiKey.present` 为 `true` → Key 已在环境变量中，无需操作。
      2. `apiKey.present` 为 `false` 且 `apiKey.configFileHasKey` 为 `true` → 直接复制 JSON 中 `restoreCommand` 的完整值并执行，将 Key 导入当前 Shell。示例：脚本返回 `"restoreCommand": "export TENCENT_NEWS_APIKEY='eyJhbGci...'"` 时，直接在终端执行：
