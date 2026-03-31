@@ -35,6 +35,7 @@ import { type FeishuPermissionError, resolveFeishuSenderName } from "./bot-sende
 import { createFeishuClient } from "./client.js";
 import { finalizeFeishuMessageProcessing, tryRecordMessagePersistent } from "./dedup.js";
 import { maybeCreateDynamicAgent } from "./dynamic-agent.js";
+import { hasJiuyanDirectOpsCommand } from "./jiuyan-data-ops-intent.js";
 import { maybeHandleJiuyanFeishuDirectOps } from "./jiuyan-data-ops.js";
 import { extractMentionTargets, isMentionForwardRequest } from "./mention.js";
 import {
@@ -505,10 +506,10 @@ export async function handleFeishuMessage(params: {
       accountId: account.accountId,
     });
     const commandProbeBody = isGroup ? normalizeFeishuCommandProbeBody(ctx.content) : ctx.content;
-    const shouldComputeCommandAuthorized = core.channel.commands.shouldComputeCommandAuthorized(
-      commandProbeBody,
-      cfg,
-    );
+    const hasDirectJiuyanOpsCommand = hasJiuyanDirectOpsCommand(ctx.content);
+    const shouldComputeCommandAuthorized =
+      hasDirectJiuyanOpsCommand ||
+      core.channel.commands.shouldComputeCommandAuthorized(commandProbeBody, cfg);
     const storeAllowFrom =
       !isGroup &&
       dmPolicy !== "allowlist" &&

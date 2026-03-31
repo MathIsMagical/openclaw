@@ -69,6 +69,17 @@ describe("parseJiuyanExportIntent", () => {
     });
   });
 
+  it("matches longer formula export prefixes before shorter variants", () => {
+    expect(parseJiuyanExportIntent("/公式预测销量 更新生产计划")).toEqual({
+      prefix: "/公式预测销量",
+      fileScope: false,
+    });
+    expect(parseJiuyanExportIntent("/公式计算销量 计算销量")).toEqual({
+      prefix: "/公式计算销量",
+      fileScope: false,
+    });
+  });
+
   it("treats bare export prefixes as default exports", () => {
     expect(parseJiuyanExportIntent("/生产计划")).toEqual({
       prefix: "/生产计划",

@@ -41,6 +41,14 @@ function resolveBundledDirFromPackageRoot(
   return undefined;
 }
 
+function resolveSourceBundledDirFromPackageRoot(packageRoot: string): string | undefined {
+  const sourceExtensionsDir = path.join(packageRoot, "extensions");
+  if (fs.existsSync(sourceExtensionsDir)) {
+    return sourceExtensionsDir;
+  }
+  return undefined;
+}
+
 export function resolveBundledPluginsDir(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const override = env.OPENCLAW_BUNDLED_PLUGINS_DIR?.trim();
   if (override) {
@@ -75,6 +83,14 @@ export function resolveBundledPluginsDir(env: NodeJS.ProcessEnv = process.env): 
     ].filter(
       (entry, index, all): entry is string => Boolean(entry) && all.indexOf(entry) === index,
     );
+    if (preferSourceCheckout) {
+      for (const packageRoot of packageRoots) {
+        const sourceBundledDir = resolveSourceBundledDirFromPackageRoot(packageRoot);
+        if (sourceBundledDir) {
+          return sourceBundledDir;
+        }
+      }
+    }
     for (const packageRoot of packageRoots) {
       const bundledDir = resolveBundledDirFromPackageRoot(packageRoot, preferSourceCheckout);
       if (bundledDir) {

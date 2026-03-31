@@ -192,6 +192,26 @@ describe("resolveBundledPluginsDir", () => {
     });
   });
 
+  it("prefers source checkouts under vitest even when argv[1] resolves to an installed runtime tree", () => {
+    const installedRoot = createOpenClawRoot({
+      prefix: "openclaw-bundled-dir-vitest-installed-",
+      hasDistRuntimeExtensions: true,
+      hasDistExtensions: true,
+    });
+    const sourceRoot = createOpenClawRoot({
+      prefix: "openclaw-bundled-dir-vitest-source-",
+      hasExtensions: true,
+      hasSrc: true,
+      hasGitCheckout: true,
+    });
+    expectResolvedBundledDir({
+      cwd: sourceRoot,
+      argv1: path.join(installedRoot, "openclaw.mjs"),
+      vitest: "true",
+      expectedDir: path.join(sourceRoot, "extensions"),
+    });
+  });
+
   it.each([
     {
       name: "prefers the running CLI package root over an unrelated cwd checkout",
