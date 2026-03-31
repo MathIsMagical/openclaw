@@ -4,7 +4,11 @@ vi.mock("../../../src/config/bundled-channel-config-runtime.js", () => ({
   getBundledChannelRuntimeMap: () => new Map(),
 }));
 
-import { parseJiuyanExportIntent, parseJiuyanImportIntent } from "./jiuyan-data-ops-intent.js";
+import {
+  hasJiuyanDirectOpsCommand,
+  parseJiuyanExportIntent,
+  parseJiuyanImportIntent,
+} from "./jiuyan-data-ops-intent.js";
 import { maybeHandleJiuyanFeishuDirectOps } from "./jiuyan-data-ops.js";
 
 describe("parseJiuyanExportIntent", () => {
@@ -89,6 +93,13 @@ describe("parseJiuyanExportIntent", () => {
     expect(parseJiuyanImportIntent("/更新")).toEqual({ prefix: "/更新" });
     expect(parseJiuyanImportIntent("导入数据库")).toBeNull();
   });
+
+  it("detects explicit Jiuyan command prefixes only", () => {
+    expect(hasJiuyanDirectOpsCommand("/生产计划")).toBe(true);
+    expect(hasJiuyanDirectOpsCommand("/导入数据库")).toBe(true);
+    expect(hasJiuyanDirectOpsCommand("请帮我分析这个表格")).toBe(false);
+    expect(hasJiuyanDirectOpsCommand("financials.xlsx")).toBe(false);
+  });
 });
 
 describe("maybeHandleJiuyanFeishuDirectOps", () => {
@@ -102,6 +113,23 @@ describe("maybeHandleJiuyanFeishuDirectOps", () => {
         replyInThread: false,
         commandAuthorized: false,
         mediaList: [],
+      }),
+    ).resolves.toBe(false);
+  });
+
+  it("ignores non-command spreadsheet uploads so agent dispatch can continue", async () => {
+    await expect(
+      maybeHandleJiuyanFeishuDirectOps({
+        cfg: {} as never,
+        messageText: "Q1-sales.csv",
+        chatId: "oc_test_chat",
+        replyToMessageId: "om_test_msg",
+        replyInThread: false,
+        mediaList: [
+          {
+            path: "/tmp/Q1-sales.csv",
+          } as never,
+        ],
       }),
     ).resolves.toBe(false);
   });
