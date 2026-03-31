@@ -45,18 +45,26 @@ const JIUYAN_EXPORT_PREFIXES = [
   "/公式计算",
   "/公式预测",
 ] as const;
+const JIUYAN_IMPORT_PREFIXES_BY_LENGTH = [...JIUYAN_IMPORT_PREFIXES].sort(
+  (left, right) => right.length - left.length,
+);
 const JIUYAN_EXPORT_PREFIXES_BY_LENGTH = [...JIUYAN_EXPORT_PREFIXES].sort(
   (left, right) => right.length - left.length,
 );
+
+function findLongestMatchingPrefix<const TPrefix extends readonly string[]>(
+  prefixes: TPrefix,
+  text: string,
+): TPrefix[number] | undefined {
+  return prefixes.find((candidate) => text.startsWith(candidate));
+}
 
 export function parseJiuyanExportIntent(
   messageText: string,
   options: ParseJiuyanExportIntentOptions = {},
 ): JiuyanExportIntent | null {
   const trimmed = messageText.trim();
-  const prefix = JIUYAN_EXPORT_PREFIXES_BY_LENGTH.find((candidate) =>
-    trimmed.startsWith(candidate),
-  );
+  const prefix = findLongestMatchingPrefix(JIUYAN_EXPORT_PREFIXES_BY_LENGTH, trimmed);
   if (!prefix) {
     return null;
   }
@@ -96,7 +104,7 @@ export function parseJiuyanExportIntent(
 
 export function parseJiuyanImportIntent(messageText: string): JiuyanImportIntent | null {
   const trimmed = messageText.trim();
-  const prefix = JIUYAN_IMPORT_PREFIXES.find((candidate) => trimmed.startsWith(candidate));
+  const prefix = findLongestMatchingPrefix(JIUYAN_IMPORT_PREFIXES_BY_LENGTH, trimmed);
   if (!prefix) {
     return null;
   }
