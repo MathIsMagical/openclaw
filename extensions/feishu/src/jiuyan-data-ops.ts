@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ClawdbotConfig } from "../runtime-api.js";
 import {
+  hasJiuyanDirectOpsCommand,
   parseJiuyanExportIntent,
   parseJiuyanImportIntent,
   type JiuyanExportIntent,
@@ -549,6 +550,9 @@ export async function maybeHandleJiuyanFeishuDirectOps(params: {
   log?: (message: string) => void;
 }): Promise<boolean> {
   if (params.commandAuthorized === false) {
+    return false;
+  }
+  if (!hasJiuyanDirectOpsCommand(params.messageText)) {
     return false;
   }
   if (await maybeHandleJiuyanFeishuDirectImport(params)) {
