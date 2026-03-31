@@ -51,10 +51,6 @@ import type { DynamicAgentCreationConfig } from "./types.js";
 
 export { toMessageResourceType } from "./bot-content.js";
 
-function isJiuyanDataOpsFile(mediaPath: string): boolean {
-  return /\.(xlsx|xls|csv|zip)$/i.test(mediaPath);
-}
-
 // Cache permission errors to avoid spamming the user with repeated notifications.
 // Key: appId or "default", Value: timestamp of last notification
 const permissionErrorNotifiedAt = new Map<string, number>();
@@ -817,28 +813,6 @@ export async function handleFeishuMessage(params: {
           `feishu[${account.accountId}]: failed to send Jiuyan export error reply: ${String(sendErr)}`,
         );
       });
-      return;
-    }
-
-    const hasJiuyanDataOpsFile = mediaList.some((media) => isJiuyanDataOpsFile(media.path));
-    if (
-      hasJiuyanDataOpsFile &&
-      event.message.message_type === "file" &&
-      ctx.content.trim().startsWith("{")
-    ) {
-      await sendMessageFeishu({
-        cfg,
-        to: `chat:${ctx.chatId}`,
-        text: "文件已收到。请继续发送 /生产计划 或 /更新数据，我会按文件内容继续处理。",
-        replyToMessageId: replyTargetMessageId,
-        replyInThread: isGroup ? (groupSession?.replyInThread ?? false) : false,
-        accountId: account.accountId,
-      }).catch((sendErr) => {
-        log(
-          `feishu[${account.accountId}]: failed to send Jiuyan file receipt reply: ${String(sendErr)}`,
-        );
-      });
-      log(`feishu[${account.accountId}]: intercepted standalone Jiuyan file message`);
       return;
     }
 
