@@ -28,6 +28,15 @@ const SELECT_EXPORT_SKUS_SCRIPT = path.join(JIUYAN_UTILS_DIR, "select_export_sku
 const EXPORT_FORECAST_SCRIPT = path.join(JIUYAN_UTILS_DIR, "export_forecast.py");
 const IMPORT_SALES_SCRIPT = path.join(JIUYAN_UTILS_DIR, "import_sales.py");
 const IMPORT_SKUS_SCRIPT = path.join(JIUYAN_UTILS_DIR, "import_skus.py");
+const TIMESFM_ROOT = "/Users/andychan/Documents/timesfm";
+const TIMESFM_JIUYAN_SALES_DIR = path.join(TIMESFM_ROOT, "jiuyan-sales");
+export const TIMESFM_OUTPUTS_DIR = path.join(TIMESFM_JIUYAN_SALES_DIR, "outputs");
+const TIMESFM_PYTHON_CANDIDATES = [path.join(TIMESFM_ROOT, ".venv", "bin", "python")] as const;
+const TIMESFM_PYTHON =
+  TIMESFM_PYTHON_CANDIDATES.find((candidate) => existsSync(candidate)) ?? "/usr/bin/python3";
+const TIMESFM_CLEAR_XLSX_SCRIPT = path.join(TIMESFM_JIUYAN_SALES_DIR, "clear_xlsx.py");
+const TIMESFM_FORECAST_SCRIPT = path.join(TIMESFM_JIUYAN_SALES_DIR, "forecast_jiuyan.py");
+const TIMESFM_EXPORT_SCRIPT = path.join(TIMESFM_JIUYAN_SALES_DIR, "export_forecast.py");
 
 type ShellResult = {
   stdout: string;
@@ -118,6 +127,17 @@ export type JiuyanDirectExportExecutionResult =
       scopeSummary: string;
       completionIntro: string;
       months?: number;
+      workbookPaths?: never;
+    }
+  | {
+      kind: "export";
+      outcome: "success";
+      workbookPath?: never;
+      workbookPaths: string[];
+      message: string;
+      scopeSummary: string;
+      completionIntro: string;
+      months?: number;
     };
 
 export type JiuyanDirectDeliveryItem =
@@ -154,6 +174,57 @@ async function runJiuyanPython(args: readonly string[]): Promise<ShellResult> {
     stderr,
     combined: [stdout, stderr].filter(Boolean).join("\n").trim(),
   };
+}
+
+async function runTimesfmPython(args: readonly string[]): Promise<ShellResult> {
+  const { stdout, stderr } = await execFileAsync(TIMESFM_PYTHON, [...args], {
+    cwd: TIMESFM_JIUYAN_SALES_DIR,
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  return {
+    stdout,
+    stderr,
+    combined: [stdout, stderr].filter(Boolean).join("\n").trim(),
+  };
+}
+
+async function readSkuCodesFromScopeFile(filePath: string): Promise<string[]> {
+  const readerProgram = [
+    "import json",
+    "import sys",
+    `sys.path.insert(0, ${JSON.stringify(JIUYAN_UTILS_DIR)})`,
+    "from select_export_skus import read_skus_from_file",
+    "df = read_skus_from_file(sys.argv[1])",
+    'codes = sorted({str(code).strip() for code in df["sku_code"].tolist() if str(code).strip()})',
+    "print(json.dumps(codes, ensure_ascii=False))",
+  ].join("\n");
+  const result = await runJiuyanPython(["-c", readerProgram, filePath]);
+  try {
+    const parsed = JSON.parse(result.stdout.trim()) as unknown;
+    if (!Array.isArray(parsed)) {
+      throw new Error("SKU scope payload is not an array.");
+    }
+    return parsed.filter((value): value is string => typeof value === "string" && value.length > 0);
+  } catch (error) {
+    throw new Error(
+      `Failed to read SKU scope from ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+async function createTimesfmScopeCsv(params: {
+  scopeWorkbookPath: string;
+  skuCodes: readonly string[];
+}): Promise<string> {
+  const scopeBaseName = path.basename(
+    params.scopeWorkbookPath,
+    path.extname(params.scopeWorkbookPath),
+  );
+  const csvPath = path.join(TIMESFM_OUTPUTS_DIR, `${scopeBaseName}.csv`);
+  const csvBody = ["sku_code", ...params.skuCodes].join("\n");
+  await fs.mkdir(TIMESFM_OUTPUTS_DIR, { recursive: true });
+  await fs.writeFile(csvPath, `${csvBody}\n`, "utf8");
+  return csvPath;
 }
 
 async function recreateDir(dirPath: string): Promise<void> {
@@ -376,9 +447,108 @@ function buildScopeSummary(intent: JiuyanExportIntent): string {
 }
 
 function buildCompletionIntro(intent: JiuyanExportIntent): string {
+  if (intent.prefix === "/AI生产计划") {
+    return "AI 生产计划已生成，Excel 已发送。";
+  }
   return intent.prefix === "/销量计算"
     ? "销量计算已完成，Excel 已发送。"
     : "生产计划已更新，Excel 已发送。";
+}
+
+async function listTimesfmOutputWorkbooks(): Promise<string[]> {
+  const entries = await fs.readdir(TIMESFM_OUTPUTS_DIR, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && /\.xlsx$/i.test(entry.name))
+    .map((entry) => path.join(TIMESFM_OUTPUTS_DIR, entry.name))
+    .sort((left, right) => left.localeCompare(right, "zh-CN"));
+}
+
+async function executeJiuyanAiDirectExport(params: {
+  intent: JiuyanExportIntent;
+  inputPaths: readonly string[];
+}): Promise<JiuyanDirectExportExecutionResult> {
+  await runTimesfmPython([TIMESFM_CLEAR_XLSX_SCRIPT]);
+
+  const stagedScopeFiles = params.intent.fileScope
+    ? await stageScopeInputFiles(params.inputPaths)
+    : [];
+  if (params.intent.fileScope && stagedScopeFiles.length === 0) {
+    return {
+      kind: "export",
+      outcome: "needs_input",
+      message:
+        "未找到可用于“表中 SKU”范围的 Excel 或 CSV 文件，请引用一个包含 SKU 列的文件后再试。",
+    };
+  }
+
+  const scopeArgs = buildScopeArgs(params.intent, stagedScopeFiles);
+  let scopeWorkbookPath: string | undefined;
+  let timesfmScopeFilePath: string | undefined;
+  let scopeSkuCodes: string[] = [];
+  if (scopeArgs.length > 0) {
+    const scopeResult = await runJiuyanPython([SELECT_EXPORT_SKUS_SCRIPT, ...scopeArgs]);
+    scopeWorkbookPath = resolveExportWorkbookPath(scopeResult.combined) ?? undefined;
+    if (!scopeWorkbookPath) {
+      throw new Error(
+        `Jiuyan AI scope export did not return an .xlsx path.\n${scopeResult.combined}`,
+      );
+    }
+    scopeSkuCodes = await readSkuCodesFromScopeFile(scopeWorkbookPath);
+    if (scopeSkuCodes.length === 0) {
+      throw new Error(
+        `Jiuyan AI scope workbook did not contain any SKU codes.\n${scopeWorkbookPath}`,
+      );
+    }
+    timesfmScopeFilePath = await createTimesfmScopeCsv({
+      scopeWorkbookPath,
+      skuCodes: scopeSkuCodes,
+    });
+  }
+
+  const forecastArgs = [
+    TIMESFM_FORECAST_SCRIPT,
+    ...(params.intent.months ? ["--horizon", String(params.intent.months)] : []),
+    ...(scopeSkuCodes.length > 0 ? ["--skus", scopeSkuCodes.join(",")] : []),
+    ...(params.intent.yesterdayTop && !params.intent.fileScope
+      ? ["--max-skus", String(params.intent.yesterdayTop)]
+      : []),
+    ...(params.intent.lastMonthTop && !params.intent.fileScope
+      ? ["--max-skus", String(params.intent.lastMonthTop)]
+      : []),
+  ];
+  await runTimesfmPython(forecastArgs);
+
+  const exportArgs = [
+    TIMESFM_EXPORT_SCRIPT,
+    ...(params.intent.months ? ["--months", String(params.intent.months)] : []),
+    ...(timesfmScopeFilePath ? ["--sku-scope-file", timesfmScopeFilePath] : []),
+  ];
+  await runTimesfmPython(exportArgs);
+
+  const workbookPaths = await listTimesfmOutputWorkbooks();
+  if (workbookPaths.length === 0) {
+    throw new Error(`Jiuyan AI export did not produce any .xlsx files in ${TIMESFM_OUTPUTS_DIR}.`);
+  }
+
+  const scopeSummary = buildScopeSummary(params.intent);
+  const completionIntro = buildCompletionIntro(params.intent);
+
+  return {
+    kind: "export",
+    outcome: "success",
+    workbookPaths,
+    message: [
+      completionIntro,
+      params.intent.months ? `需求月份：未来 ${params.intent.months} 个月` : undefined,
+      `SKU 范围：${scopeSummary}`,
+      `输出文件：${workbookPaths.length} 个`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    scopeSummary,
+    completionIntro,
+    ...(params.intent.months ? { months: params.intent.months } : {}),
+  };
 }
 
 export async function executeJiuyanDirectImport(params: {
@@ -448,6 +618,12 @@ export async function executeJiuyanDirectExport(params: {
   if (!intent) {
     return null;
   }
+  if (intent.prefix === "/AI生产计划") {
+    return await executeJiuyanAiDirectExport({
+      intent,
+      inputPaths: params.inputPaths,
+    });
+  }
 
   await runJiuyanPython([CLEAR_FOLDERS_SCRIPT, "--exports"]);
 
@@ -515,11 +691,31 @@ export function buildJiuyanDirectImportDeliveryPlan(
 export function buildJiuyanDirectExportDeliveryPlan(
   result: JiuyanDirectExportExecutionResult,
 ): JiuyanDirectDeliveryPlan {
+  const workbookPaths = result.outcome === "success" ? result.workbookPaths : undefined;
+  const isMultiWorkbookExport = Array.isArray(workbookPaths);
+  let deliveries: JiuyanDirectDeliveryItem[];
+  if (result.outcome === "needs_input") {
+    deliveries = [{ kind: "text", text: result.message }];
+  } else if (isMultiWorkbookExport) {
+    deliveries = workbookPaths.map((filePath, index) => ({
+      kind: "file",
+      filePath,
+      ...(index === workbookPaths.length - 1 ? { text: result.message } : {}),
+    }));
+  } else {
+    const workbookPath = result.workbookPath;
+    if (!workbookPath) {
+      throw new Error("Jiuyan export result is missing workbookPath.");
+    }
+    deliveries = [{ kind: "file", filePath: workbookPath, text: result.message }];
+  }
   return {
-    startMessage: "正在准备生产计划，完成后立刻会把结果文件发给你。",
-    deliveries:
+    startMessage:
       result.outcome === "needs_input"
-        ? [{ kind: "text", text: result.message }]
-        : [{ kind: "file", filePath: result.workbookPath, text: result.message }],
+        ? "正在准备生产计划，完成后立刻会把结果文件发给你。"
+        : isMultiWorkbookExport
+          ? "正在准备 AI 生产计划，完成后立刻会把结果文件发给你。"
+          : "正在准备生产计划，完成后立刻会把结果文件发给你。",
+    deliveries,
   };
 }

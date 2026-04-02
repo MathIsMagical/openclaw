@@ -24,6 +24,7 @@ type WeixinJiuyanParams = {
   cdnBaseUrl: string;
   accountId: string;
   log?: (message: string) => void;
+  skipStartMessage?: boolean;
 };
 
 function buildCommonOpts(params: WeixinJiuyanParams) {
@@ -42,11 +43,13 @@ async function sendJiuyanWeixinDeliveryPlan(
   params: WeixinJiuyanParams,
   plan: JiuyanDirectDeliveryPlan,
 ): Promise<void> {
-  await sendMessageWeixin({
-    to: params.to,
-    text: plan.startMessage,
-    opts: buildCommonOpts(params),
-  });
+  if (params.skipStartMessage !== true) {
+    await sendMessageWeixin({
+      to: params.to,
+      text: plan.startMessage,
+      opts: buildCommonOpts(params),
+    });
+  }
 
   for (const delivery of plan.deliveries) {
     if (delivery.kind === "text") {
@@ -98,12 +101,23 @@ async function maybeHandleJiuyanWeixinDirectImport(params: WeixinJiuyanParams): 
 async function maybeHandleJiuyanWeixinDirectExport(params: WeixinJiuyanParams): Promise<boolean> {
   const inputPaths = collectInputPaths(params.mediaPath);
   const hasDefaultScopeFile = inputPaths.some((inputPath) => isJiuyanScopeInputPath(inputPath));
-  if (!parseJiuyanExportIntent(params.messageText, { defaultFileScope: hasDefaultScopeFile })) {
+  const intent = parseJiuyanExportIntent(params.messageText, {
+    defaultFileScope: hasDefaultScopeFile,
+  });
+  if (!intent) {
     return false;
   }
 
   params.log?.(`weixin[${params.accountId}]: handling Jiuyan export directly`);
   try {
+    await sendMessageWeixin({
+      to: params.to,
+      text:
+        intent.prefix === "/AI生产计划"
+          ? "正在准备 AI 生产计划，完成后立刻会把结果文件发给你。"
+          : "正在准备生产计划，完成后立刻会把结果文件发给你。",
+      opts: buildCommonOpts(params),
+    });
     const result = await executeJiuyanDirectExport({
       messageText: params.messageText,
       inputPaths,
@@ -111,7 +125,10 @@ async function maybeHandleJiuyanWeixinDirectExport(params: WeixinJiuyanParams): 
     if (!result) {
       return false;
     }
-    await sendJiuyanWeixinDeliveryPlan(params, buildJiuyanDirectExportDeliveryPlan(result));
+    await sendJiuyanWeixinDeliveryPlan(
+      { ...params, skipStartMessage: true },
+      buildJiuyanDirectExportDeliveryPlan(result),
+    );
     return true;
   } catch (error) {
     logger.error(`weixin Jiuyan export failed: ${String(error)}`);
