@@ -79,6 +79,11 @@ type FeishuMessageSender = {
   id?: string;
   id_type?: string;
   sender_type?: string;
+  sender_id?: {
+    open_id?: string;
+    user_id?: string;
+    union_id?: string;
+  };
 };
 
 type FeishuMessageGetItem = {
@@ -87,7 +92,9 @@ type FeishuMessageGetItem = {
   chat_type?: FeishuChatType;
   thread_id?: string;
   msg_type?: string;
+  message_type?: string;
   body?: { content?: string };
+  content?: string;
   sender?: FeishuMessageSender;
   create_time?: string;
 };
@@ -261,8 +268,11 @@ function parseFeishuMessageItem(
   item: FeishuMessageGetItem,
   fallbackMessageId?: string,
 ): FeishuMessageInfo {
-  const msgType = item.msg_type ?? "text";
-  const rawContent = item.body?.content ?? "";
+  const msgType = item.msg_type ?? item.message_type ?? "text";
+  const rawContent = item.body?.content ?? item.content ?? "";
+  const senderOpenId = item.sender?.sender_id?.open_id?.trim();
+  const senderUserId = item.sender?.sender_id?.user_id?.trim();
+  const senderId = item.sender?.id?.trim() || senderOpenId || senderUserId;
 
   return {
     messageId: item.message_id ?? fallbackMessageId ?? "",
@@ -271,8 +281,9 @@ function parseFeishuMessageItem(
       item.chat_type === "group" || item.chat_type === "private" || item.chat_type === "p2p"
         ? item.chat_type
         : undefined,
-    senderId: item.sender?.id,
-    senderOpenId: item.sender?.id_type === "open_id" ? item.sender?.id : undefined,
+    senderId,
+    senderOpenId:
+      item.sender?.id_type === "open_id" ? item.sender?.id?.trim() : (senderOpenId ?? undefined),
     senderType: item.sender?.sender_type,
     content: parseFeishuMessageContent(rawContent, msgType),
     rawContent,
