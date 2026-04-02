@@ -37,6 +37,7 @@ import { createFeishuClient } from "./client.js";
 import { finalizeFeishuMessageProcessing, tryRecordMessagePersistent } from "./dedup.js";
 import { maybeCreateDynamicAgent } from "./dynamic-agent.js";
 import { maybeHandleJiuyanFeishuDirectOps } from "./jiuyan-data-ops.js";
+import { resolveInboundFeishuMediaMaxMb } from "./media-limits.js";
 import { extractMentionTargets, isMentionForwardRequest } from "./mention.js";
 import {
   resolveFeishuGroupConfig,
@@ -716,7 +717,11 @@ export async function handleFeishuMessage(params: {
     log(`feishu[${account.accountId}]: ${inboundLabel}: ${preview}`);
 
     // Resolve media from message
-    const mediaMaxBytes = (feishuCfg?.mediaMaxMb ?? 30) * 1024 * 1024; // 30MB default
+    const mediaMaxMb = resolveInboundFeishuMediaMaxMb({
+      messageText: ctx.content,
+      configuredMaxMb: feishuCfg?.mediaMaxMb,
+    });
+    const mediaMaxBytes = mediaMaxMb * 1024 * 1024;
     const mediaList = await resolveFeishuMediaList({
       cfg,
       messageId: ctx.messageId,
