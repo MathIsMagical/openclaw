@@ -6,6 +6,8 @@ description_en: 7×24 news updates with hot news, morning/evening briefings, rea
 version: 1.0.1
 author: TencentNews
 tags: [news, tencent, headlines, briefings, news rankings, real-time updates]
+command-dispatch: tool
+command-tool: tencent_news
 ---
 
 # 腾讯新闻内容订阅
