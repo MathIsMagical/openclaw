@@ -683,7 +683,8 @@ export function buildJiuyanDirectImportDeliveryPlan(
   result: JiuyanDirectImportExecutionResult,
 ): JiuyanDirectDeliveryPlan {
   return {
-    startMessage: "文件已收到，正在准备导入数据，导入完成后会提醒你。",
+    startMessage:
+      result.outcome === "success" ? "文件已收到，正在准备导入数据，导入完成后会提醒你。" : "",
     deliveries: [{ kind: "text", text: result.message }],
   };
 }

@@ -1,7 +1,27 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../../src/config/bundled-channel-config-runtime.js", () => ({
   getBundledChannelConfigSchemaMap: () => new Map(),
   getBundledChannelRuntimeMap: () => new Map(),
+}));
+vi.mock("./jiuyan-direct-ops-runtime.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./jiuyan-direct-ops-runtime.js")>();
+  return {
+    ...actual,
+    executeJiuyanDirectImport: vi.fn(async (params: { inputPaths: readonly string[] }) => ({
+      kind: "import" as const,
+      outcome: params.inputPaths.length > 0 ? ("success" as const) : ("needs_input" as const),
+      message:
+        params.inputPaths.length > 0
+          ? "销售数据更新成功！"
+          : "未找到可用于数据库导入的 Excel、CSV 或 ZIP 文件，请附上或引用文件后再试。",
+    })),
+  };
+});
+vi.mock("./send.js", () => ({
+  sendMessageFeishu: vi.fn(async () => ({ messageId: "om_test_reply", chatId: "oc_test_chat" })),
+}));
+vi.mock("./media.js", () => ({
+  sendMediaFeishu: vi.fn(async () => ({ messageId: "om_test_media", chatId: "oc_test_chat" })),
 }));
 
 import {
@@ -10,6 +30,11 @@ import {
   parseJiuyanImportIntent,
 } from "openclaw/plugin-sdk/jiuyan-direct-ops";
 import { maybeHandleJiuyanFeishuDirectOps } from "./jiuyan-data-ops.js";
+import { sendMessageFeishu } from "./send.js";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("parseJiuyanExportIntent", () => {
   it("parses months and default top scope from /生产计划 commands", () => {
@@ -186,5 +211,42 @@ describe("maybeHandleJiuyanFeishuDirectOps", () => {
         ],
       }),
     ).resolves.toBe(false);
+  });
+
+  it("sends an immediate import start message when input files are present", async () => {
+    await expect(
+      maybeHandleJiuyanFeishuDirectOps({
+        cfg: {} as never,
+        messageText: "/更新数据",
+        chatId: "oc_test_chat",
+        replyToMessageId: "om_test_msg",
+        replyInThread: false,
+        mediaList: [{ path: "/tmp/Q1-sales.csv" } as never],
+      }),
+    ).resolves.toBe(true);
+
+    const messages = vi.mocked(sendMessageFeishu).mock.calls.map((call) => call[0]?.text);
+    expect(messages).toEqual([
+      "文件已收到，正在准备导入数据，导入完成后会提醒你。",
+      "销售数据更新成功！",
+    ]);
+  });
+
+  it("does not send the optimistic import start message when no input files exist", async () => {
+    await expect(
+      maybeHandleJiuyanFeishuDirectOps({
+        cfg: {} as never,
+        messageText: "/更新数据",
+        chatId: "oc_test_chat",
+        replyToMessageId: "om_test_msg",
+        replyInThread: false,
+        mediaList: [],
+      }),
+    ).resolves.toBe(true);
+
+    const messages = vi.mocked(sendMessageFeishu).mock.calls.map((call) => call[0]?.text);
+    expect(messages).toEqual([
+      "未找到可用于数据库导入的 Excel、CSV 或 ZIP 文件，请附上或引用文件后再试。",
+    ]);
   });
 });
