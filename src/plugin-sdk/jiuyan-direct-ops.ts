@@ -2,8 +2,19 @@ function normalizeSkuToken(text: string): string {
   return text.replace(/\s+/gi, " ").trim();
 }
 
+function normalizeJiuyanCommandPrefix(text: string): string {
+  return text.replace(/^\/ai\s*生产计划/i, "/AI生产计划");
+}
+
 export type JiuyanExportIntent = {
-  prefix: "/生产计划" | "/销量计算" | "/公式计算" | "/公式预测" | "/公式预测销量" | "/公式计算销量";
+  prefix:
+    | "/生产计划"
+    | "/AI生产计划"
+    | "/销量计算"
+    | "/公式计算"
+    | "/公式预测"
+    | "/公式预测销量"
+    | "/公式计算销量";
   months?: number;
   yesterdayTop?: number;
   lastMonthTop?: number;
@@ -39,6 +50,7 @@ const JIUYAN_IMPORT_PREFIXES = [
 
 const JIUYAN_EXPORT_PREFIXES = [
   "/生产计划",
+  "/AI生产计划",
   "/销量计算",
   "/公式预测销量",
   "/公式计算销量",
@@ -64,7 +76,7 @@ export function parseJiuyanExportIntent(
   messageText: string,
   options: ParseJiuyanExportIntentOptions = {},
 ): JiuyanExportIntent | null {
-  const trimmed = messageText.trim();
+  const trimmed = normalizeJiuyanCommandPrefix(messageText.trim());
   const prefix = findLongestMatchingPrefix(JIUYAN_EXPORT_PREFIXES_BY_LENGTH, trimmed);
   if (!prefix) {
     return null;
@@ -87,7 +99,8 @@ export function parseJiuyanExportIntent(
   const lastMonthTopMatch = normalized.match(/上个月\s*top\s*(\d+)(?:\s*sku)?/i);
   const plainTopMatch = normalized.match(/top\s*(\d+)(?:\s*sku)?/i);
   const fileScope =
-    /表中\s*sku/i.test(normalized) || (options.defaultFileScope === true && prefix === "/生产计划");
+    /表中\s*sku/i.test(normalized) ||
+    (options.defaultFileScope === true && (prefix === "/生产计划" || prefix === "/AI生产计划"));
 
   return {
     prefix,
@@ -104,7 +117,7 @@ export function parseJiuyanExportIntent(
 }
 
 export function parseJiuyanImportIntent(messageText: string): JiuyanImportIntent | null {
-  const trimmed = messageText.trim();
+  const trimmed = normalizeJiuyanCommandPrefix(messageText.trim());
   const prefix = findLongestMatchingPrefix(JIUYAN_IMPORT_PREFIXES_BY_LENGTH, trimmed);
   if (!prefix) {
     return null;
