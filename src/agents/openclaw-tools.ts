@@ -31,6 +31,7 @@ import { createSessionsSendTool } from "./tools/sessions-send-tool.js";
 import { createSessionsSpawnTool } from "./tools/sessions-spawn-tool.js";
 import { createSessionsYieldTool } from "./tools/sessions-yield-tool.js";
 import { createSubagentsTool } from "./tools/subagents-tool.js";
+import { createTencentNewsTool } from "./tools/tencent-news-tool.js";
 import { createTtsTool } from "./tools/tts-tool.js";
 import { createUpdatePlanTool } from "./tools/update-plan-tool.js";
 import { createVideoGenerateTool } from "./tools/video-generate-tool.js";
@@ -296,6 +297,7 @@ export function createOpenClawTools(
     createSubagentsTool({
       agentSessionKey: options?.agentSessionKey,
     }),
+    createTencentNewsTool(),
     createSessionStatusTool({
       agentSessionKey: options?.agentSessionKey,
       config: resolvedConfig,
