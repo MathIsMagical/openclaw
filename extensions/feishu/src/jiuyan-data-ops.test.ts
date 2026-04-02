@@ -123,9 +123,25 @@ describe("maybeHandleJiuyanFeishuDirectOps", () => {
         replyToMessageId: "om_test_msg",
         replyInThread: false,
         commandAuthorized: false,
+        commandAuthorizationConfigured: true,
         mediaList: [],
       }),
     ).resolves.toBe(false);
+  });
+
+  it("does not treat unconfigured command authorization as a hard stop", async () => {
+    await expect(
+      maybeHandleJiuyanFeishuDirectOps({
+        cfg: {} as never,
+        messageText: "/更新数据",
+        chatId: "oc_test_chat",
+        replyToMessageId: "om_test_msg",
+        replyInThread: false,
+        commandAuthorized: false,
+        commandAuthorizationConfigured: false,
+        mediaList: [],
+      }),
+    ).resolves.toBe(true);
   });
 
   it("ignores non-command spreadsheet uploads so agent dispatch can continue", async () => {
