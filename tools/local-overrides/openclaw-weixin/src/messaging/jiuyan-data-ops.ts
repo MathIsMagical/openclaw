@@ -3,12 +3,12 @@ import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { logger } from "../util/logger.js";
 import {
   parseJiuyanExportIntent,
   parseJiuyanImportIntent,
   type JiuyanExportIntent,
-} from "./jiuyan-data-ops-intent.js";
+} from "openclaw/plugin-sdk/jiuyan-direct-ops";
+import { logger } from "../util/logger.js";
 import { sendWeixinMediaFile } from "./send-media.js";
 import { sendMessageWeixin } from "./send.js";
 

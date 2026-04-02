@@ -2,14 +2,14 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ClawdbotConfig } from "../runtime-api.js";
 import {
   hasJiuyanDirectOpsCommand,
   parseJiuyanExportIntent,
   parseJiuyanImportIntent,
   type JiuyanExportIntent,
   type JiuyanImportIntent,
-} from "./jiuyan-data-ops-intent.js";
+} from "openclaw/plugin-sdk/jiuyan-direct-ops";
+import type { ClawdbotConfig } from "../runtime-api.js";
 import { sendMediaFeishu } from "./media.js";
 import { sendMessageFeishu } from "./send.js";
 import type { FeishuMediaInfo } from "./types.js";
