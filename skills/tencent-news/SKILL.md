@@ -14,7 +14,7 @@ command-tool: tencent_news
 
 通过 `tencent-news-cli` 获取腾讯新闻内容。
 
-> 核心原则：基础设施流程（安装、更新、Key 配置）交给脚本处理；智能体只负责选择 CLI 子命令和组合参数——始终先读 `help`，不要硬编码。
+> 核心原则：基础设施流程（安装、更新、Key 配置）交给脚本处理。当前 `/tencent-news` 工具层固定支持 `help`、`hot`、`morning`、`evening`、`ai-daily [topic]` 这组子命令，输出需按本文件格式整理。
 
 ## Workflow
 
@@ -83,10 +83,17 @@ powershell -c "irm bun.sh/install.ps1 | iex"
    - 设置后必须执行返回的 `sessionCommand` 让当前终端生效。**不需要额外存入永久记忆。**
    - 详细配置与故障排查见 [`references/env-setup-guide.md`](references/env-setup-guide.md)。
 
-5. **执行 `help`**
-   优先使用 `platform.helpCommand`；自行拼命令时确保正确引用 `platform.cliPath`，Windows 使用 PowerShell 调用形式。
+5. **支持的用户命令**
+   - `/tencent-news help`
+   - `/tencent-news hot`
+   - `/tencent-news morning`
+   - `/tencent-news evening`
+   - `/tencent-news ai-daily`
+   - `/tencent-news ai-daily <主题>`
 
-6. **根据 `help` 输出选择子命令执行**，按下方 Output Format 输出结果。
+6. **执行对应子命令并按下方 Output Format 输出结果**
+   - `help`：直接执行 `platform.helpCommand`
+   - 其余子命令：按当前工具层支持的参数映射执行
 
 ## Output Format
 

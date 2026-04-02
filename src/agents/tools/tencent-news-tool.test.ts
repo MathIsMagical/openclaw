@@ -8,6 +8,7 @@ describe("resolveTencentNewsCommand", () => {
   });
 
   it("maps simple subcommands directly", () => {
+    expect(resolveTencentNewsCommand("help")).toEqual({ argv: ["help"] });
     expect(resolveTencentNewsCommand("hot")).toEqual({ argv: ["hot"] });
     expect(resolveTencentNewsCommand("morning")).toEqual({ argv: ["morning"] });
     expect(resolveTencentNewsCommand("evening")).toEqual({ argv: ["evening"] });

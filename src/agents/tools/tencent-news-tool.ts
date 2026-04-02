@@ -37,6 +37,7 @@ const CLI_PATH = path.join(
 const CONFIG_PATH = path.join(os.homedir(), ".config", "tencent-news-cli", "config.json");
 
 type TencentNewsResolvedCommand =
+  | { argv: ["help"] }
   | { argv: ["hot"] }
   | { argv: ["morning"] }
   | { argv: ["evening"] }
@@ -58,6 +59,8 @@ export function resolveTencentNewsCommand(rawCommand: string): TencentNewsResolv
   const remainder = normalizeTopic(rest.join(" "));
 
   switch (subcommand) {
+    case "help":
+      return { argv: ["help"] };
     case "hot":
       return { argv: ["hot"] };
     case "morning":
@@ -68,7 +71,7 @@ export function resolveTencentNewsCommand(rawCommand: string): TencentNewsResolv
       return remainder ? { argv: ["ai-daily", "--query", remainder] } : { argv: ["ai-daily"] };
     default:
       throw new Error(
-        `Unsupported /tencent-news subcommand "${subcommand}". Use hot, morning, evening, or ai-daily [topic].`,
+        `Unsupported /tencent-news subcommand "${subcommand}". Use help, hot, morning, evening, or ai-daily [topic].`,
       );
   }
 }
@@ -133,7 +136,7 @@ export function createTencentNewsTool(): AnyAgentTool {
     name: "tencent_news",
     label: "Tencent News",
     description:
-      "Run the bundled Tencent News CLI deterministically for /tencent-news commands (hot, morning, evening, ai-daily).",
+      "Run the bundled Tencent News CLI deterministically for /tencent-news commands (help, hot, morning, evening, ai-daily).",
     parameters: TencentNewsToolSchema,
     execute: async (_toolCallId, args) => {
       const params = args as Record<string, unknown>;
