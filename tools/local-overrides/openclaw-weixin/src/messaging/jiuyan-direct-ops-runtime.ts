@@ -120,6 +120,22 @@ export type JiuyanDirectExportExecutionResult =
       months?: number;
     };
 
+export type JiuyanDirectDeliveryItem =
+  | {
+      kind: "text";
+      text: string;
+    }
+  | {
+      kind: "file";
+      filePath: string;
+      text?: string;
+    };
+
+export type JiuyanDirectDeliveryPlan = {
+  startMessage: string;
+  deliveries: JiuyanDirectDeliveryItem[];
+};
+
 export function isJiuyanScopeInputPath(filePath: string): boolean {
   return /\.(xlsx|xls|csv)$/i.test(filePath);
 }
@@ -484,5 +500,26 @@ export async function executeJiuyanDirectExport(params: {
     scopeSummary,
     completionIntro,
     ...(intent.months ? { months: intent.months } : {}),
+  };
+}
+
+export function buildJiuyanDirectImportDeliveryPlan(
+  result: JiuyanDirectImportExecutionResult,
+): JiuyanDirectDeliveryPlan {
+  return {
+    startMessage: "文件已收到，正在准备导入数据，导入完成后会提醒你。",
+    deliveries: [{ kind: "text", text: result.message }],
+  };
+}
+
+export function buildJiuyanDirectExportDeliveryPlan(
+  result: JiuyanDirectExportExecutionResult,
+): JiuyanDirectDeliveryPlan {
+  return {
+    startMessage: "正在准备生产计划，完成后立刻会把结果文件发给你。",
+    deliveries:
+      result.outcome === "needs_input"
+        ? [{ kind: "text", text: result.message }]
+        : [{ kind: "file", filePath: result.workbookPath, text: result.message }],
   };
 }
