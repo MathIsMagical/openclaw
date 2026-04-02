@@ -159,11 +159,12 @@ export async function maybeHandleJiuyanFeishuDirectOps(params: {
   replyToMessageId: string;
   replyInThread: boolean;
   commandAuthorized?: boolean;
+  commandAuthorizationConfigured?: boolean;
   mediaList: readonly FeishuMediaInfo[];
   quotedMediaList?: readonly FeishuMediaInfo[];
   log?: (message: string) => void;
 }): Promise<boolean> {
-  if (params.commandAuthorized === false) {
+  if (params.commandAuthorizationConfigured && params.commandAuthorized === false) {
     return false;
   }
   if (!hasJiuyanDirectOpsCommand(params.messageText)) {

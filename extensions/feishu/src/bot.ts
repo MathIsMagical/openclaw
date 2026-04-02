@@ -558,6 +558,7 @@ export async function handleFeishuMessage(params: {
     const commandAllowFrom = isGroup
       ? (groupConfig?.allowFrom ?? configAllowFrom)
       : effectiveDmAllowFrom;
+    const commandAuthorizationConfigured = commandAllowFrom.length > 0;
     const senderAllowedForCommands = resolveFeishuAllowlistMatch({
       allowFrom: commandAllowFrom,
       senderId: ctx.senderOpenId,
@@ -792,6 +793,7 @@ export async function handleFeishuMessage(params: {
         replyToMessageId: replyTargetMessageId,
         replyInThread: isGroup ? (groupSession?.replyInThread ?? false) : false,
         commandAuthorized,
+        commandAuthorizationConfigured,
         mediaList,
         quotedMediaList,
         log,
