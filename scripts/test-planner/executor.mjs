@@ -30,10 +30,20 @@ export function resolvePnpmCommandInvocation(options = {}) {
   const npmExecPath = typeof options.npmExecPath === "string" ? options.npmExecPath.trim() : "";
   if (npmExecPath && path.isAbsolute(npmExecPath)) {
     const npmExecBase = path.basename(npmExecPath).toLowerCase();
-    if (npmExecBase.startsWith("pnpm")) {
+    const npmExecExt = path.extname(npmExecBase);
+    const isJavaScriptEntrypoint =
+      npmExecBase.startsWith("pnpm") &&
+      (npmExecExt === ".js" || npmExecExt === ".cjs" || npmExecExt === ".mjs");
+    if (isJavaScriptEntrypoint) {
       return {
         command: options.nodeExecPath || process.execPath,
         args: [npmExecPath],
+      };
+    }
+    if (npmExecBase.startsWith("pnpm")) {
+      return {
+        command: npmExecPath,
+        args: [],
       };
     }
   }

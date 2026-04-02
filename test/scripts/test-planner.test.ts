@@ -742,6 +742,19 @@ describe("resolvePnpmCommandInvocation", () => {
     });
   });
 
+  it("executes native pnpm binaries directly instead of running them via node", () => {
+    expect(
+      resolvePnpmCommandInvocation({
+        npmExecPath: "/Users/tester/Library/pnpm/pnpm",
+        nodeExecPath: "/usr/local/bin/node",
+        platform: "darwin",
+      }),
+    ).toEqual({
+      command: "/Users/tester/Library/pnpm/pnpm",
+      args: [],
+    });
+  });
+
   it("falls back to cmd.exe mediation on Windows when npm_execpath is unavailable", () => {
     expect(
       resolvePnpmCommandInvocation({
