@@ -12,6 +12,7 @@
   },
   "include": [
     "src/plugin-sdk/**/*.ts",
+    "src/media-understanding/**/*.ts",
     "src/types/**/*.d.ts",
     "packages/memory-host-sdk/src/**/*.ts"
   ],
