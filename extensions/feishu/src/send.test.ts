@@ -259,6 +259,82 @@ describe("getMessageFeishu", () => {
     );
   });
 
+  it("parses sender ids from nested sender_id payloads", async () => {
+    mockClientGet.mockResolvedValueOnce({
+      code: 0,
+      data: {
+        items: [
+          {
+            message_id: "om_nested_sender",
+            chat_id: "oc_nested_sender",
+            msg_type: "file",
+            body: {
+              content: JSON.stringify({ file_key: "file_v3_quoted" }),
+            },
+            sender: {
+              sender_id: {
+                open_id: "ou_quoted_user",
+              },
+              sender_type: "user",
+            },
+          },
+        ],
+      },
+    });
+
+    const result = await getMessageFeishu({
+      cfg: {} as ClawdbotConfig,
+      messageId: "om_nested_sender",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        messageId: "om_nested_sender",
+        senderId: "ou_quoted_user",
+        senderOpenId: "ou_quoted_user",
+        senderType: "user",
+        contentType: "file",
+        rawContent: JSON.stringify({ file_key: "file_v3_quoted" }),
+      }),
+    );
+  });
+
+  it("supports message_type and top-level content aliases from the Feishu API", async () => {
+    mockClientGet.mockResolvedValueOnce({
+      code: 0,
+      data: {
+        items: [
+          {
+            message_id: "om_alias_shape",
+            chat_id: "oc_alias_shape",
+            message_type: "file",
+            content: JSON.stringify({ file_key: "file_v3_alias" }),
+            sender: {
+              sender_id: {
+                user_id: "ou_alias_user",
+              },
+              sender_type: "user",
+            },
+          },
+        ],
+      },
+    });
+
+    const result = await getMessageFeishu({
+      cfg: {} as ClawdbotConfig,
+      messageId: "om_alias_shape",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        messageId: "om_alias_shape",
+        senderId: "ou_alias_user",
+        contentType: "file",
+        rawContent: JSON.stringify({ file_key: "file_v3_alias" }),
+      }),
+    );
+  });
+
   it("reuses the same content parsing for thread history messages", async () => {
     mockClientList.mockResolvedValueOnce({
       code: 0,
