@@ -15,6 +15,14 @@ describe("sanitizeUserFacingText", () => {
     expect(sanitizeUserFacingText("Hi <final>there</final>!")).toBe("Hi there!");
   });
 
+  it("prefers explicit final blocks over leaked preamble text", () => {
+    expect(
+      sanitizeUserFacingText(
+        "think\nThe user denied the execution of the command.\n<final>[[reply_to_current]]好的，刚才的指令已被拒绝，因此未能执行。</final>",
+      ),
+    ).toBe("[[reply_to_current]]好的，刚才的指令已被拒绝，因此未能执行。");
+  });
+
   it.each(["202 results found", "400 days left"])(
     "does not clobber normal numeric prefix: %s",
     (text) => {

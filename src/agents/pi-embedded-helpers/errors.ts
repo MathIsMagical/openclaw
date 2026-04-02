@@ -745,6 +745,18 @@ function stripFinalTagsFromText(text: unknown): string {
   return normalized.replace(FINAL_TAG_RE, "");
 }
 
+function extractFinalTaggedContent(text: unknown): string | null {
+  const normalized = coerceText(text);
+  if (!normalized) {
+    return null;
+  }
+  const matches = Array.from(normalized.matchAll(/<\s*final\s*>([\s\S]*?)<\s*\/\s*final\s*>/gi));
+  if (matches.length === 0) {
+    return null;
+  }
+  return matches.map((match) => match[1] ?? "").join("");
+}
+
 function collapseConsecutiveDuplicateBlocks(text: string): string {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -955,7 +967,9 @@ export function sanitizeUserFacingText(text: unknown, opts?: { errorContext?: bo
     return raw;
   }
   const errorContext = opts?.errorContext ?? false;
-  const stripped = stripFinalTagsFromText(raw);
+  // Prefer explicit <final> sections when present so any leaked preamble
+  // (for example stray "think" text) never reaches chat surfaces.
+  const stripped = extractFinalTaggedContent(raw) ?? stripFinalTagsFromText(raw);
   const trimmed = stripped.trim();
   if (!trimmed) {
     return "";
