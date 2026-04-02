@@ -5,10 +5,13 @@ import {
 } from "openclaw/plugin-sdk/jiuyan-direct-ops";
 import type { ClawdbotConfig } from "../runtime-api.js";
 import {
+  buildJiuyanDirectExportDeliveryPlan,
+  buildJiuyanDirectImportDeliveryPlan,
   executeJiuyanDirectExport,
   executeJiuyanDirectImport,
   isJiuyanScopeInputPath,
   JIUYAN_EXPORTS_DIR,
+  type JiuyanDirectDeliveryPlan,
 } from "./jiuyan-direct-ops-runtime.js";
 import { sendMediaFeishu } from "./media.js";
 import { sendMessageFeishu } from "./send.js";
@@ -19,6 +22,57 @@ function collectInputPaths(
   quotedMediaList?: readonly FeishuMediaInfo[],
 ): string[] {
   return [...mediaList, ...(quotedMediaList ?? [])].map((media) => media.path);
+}
+
+async function sendJiuyanFeishuDeliveryPlan(
+  params: {
+    cfg: ClawdbotConfig;
+    accountId?: string;
+    chatId: string;
+    replyToMessageId: string;
+    replyInThread: boolean;
+  },
+  plan: JiuyanDirectDeliveryPlan,
+): Promise<void> {
+  await sendMessageFeishu({
+    cfg: params.cfg,
+    to: `chat:${params.chatId}`,
+    text: plan.startMessage,
+    accountId: params.accountId,
+  });
+
+  for (const delivery of plan.deliveries) {
+    if (delivery.kind === "text") {
+      await sendMessageFeishu({
+        cfg: params.cfg,
+        to: `chat:${params.chatId}`,
+        text: delivery.text,
+        replyToMessageId: params.replyToMessageId,
+        replyInThread: params.replyInThread,
+        accountId: params.accountId,
+      });
+      continue;
+    }
+    await sendMediaFeishu({
+      cfg: params.cfg,
+      to: `chat:${params.chatId}`,
+      mediaUrl: delivery.filePath,
+      replyToMessageId: params.replyToMessageId,
+      replyInThread: params.replyInThread,
+      accountId: params.accountId,
+      mediaLocalRoots: [JIUYAN_EXPORTS_DIR],
+    });
+    if (delivery.text) {
+      await sendMessageFeishu({
+        cfg: params.cfg,
+        to: `chat:${params.chatId}`,
+        text: delivery.text,
+        replyToMessageId: params.replyToMessageId,
+        replyInThread: params.replyInThread,
+        accountId: params.accountId,
+      });
+    }
+  }
 }
 
 async function maybeHandleJiuyanFeishuDirectImport(params: {
@@ -37,13 +91,6 @@ async function maybeHandleJiuyanFeishuDirectImport(params: {
   }
 
   params.log?.(`feishu[${params.accountId ?? "default"}]: handling Jiuyan import directly`);
-  await sendMessageFeishu({
-    cfg: params.cfg,
-    to: `chat:${params.chatId}`,
-    text: "文件已收到，正在准备导入数据，导入完成后会提醒你。",
-    accountId: params.accountId,
-  });
-
   const result = await executeJiuyanDirectImport({
     messageText: params.messageText,
     inputPaths: collectInputPaths(params.mediaList, params.quotedMediaList),
@@ -52,14 +99,16 @@ async function maybeHandleJiuyanFeishuDirectImport(params: {
     return false;
   }
 
-  await sendMessageFeishu({
-    cfg: params.cfg,
-    to: `chat:${params.chatId}`,
-    text: result.message,
-    replyToMessageId: params.replyToMessageId,
-    replyInThread: params.replyInThread,
-    accountId: params.accountId,
-  });
+  await sendJiuyanFeishuDeliveryPlan(
+    {
+      cfg: params.cfg,
+      accountId: params.accountId,
+      chatId: params.chatId,
+      replyToMessageId: params.replyToMessageId,
+      replyInThread: params.replyInThread,
+    },
+    buildJiuyanDirectImportDeliveryPlan(result),
+  );
   return true;
 }
 
@@ -81,13 +130,6 @@ async function maybeHandleJiuyanFeishuDirectExport(params: {
   }
 
   params.log?.(`feishu[${params.accountId ?? "default"}]: handling Jiuyan export directly`);
-  await sendMessageFeishu({
-    cfg: params.cfg,
-    to: `chat:${params.chatId}`,
-    text: "正在准备生产计划，完成后立刻会把结果文件发给你。",
-    accountId: params.accountId,
-  });
-
   const result = await executeJiuyanDirectExport({
     messageText: params.messageText,
     inputPaths,
@@ -95,35 +137,17 @@ async function maybeHandleJiuyanFeishuDirectExport(params: {
   if (!result) {
     return false;
   }
-  if (result.outcome === "needs_input") {
-    await sendMessageFeishu({
+
+  await sendJiuyanFeishuDeliveryPlan(
+    {
       cfg: params.cfg,
-      to: `chat:${params.chatId}`,
-      text: result.message,
+      accountId: params.accountId,
+      chatId: params.chatId,
       replyToMessageId: params.replyToMessageId,
       replyInThread: params.replyInThread,
-      accountId: params.accountId,
-    });
-    return true;
-  }
-
-  await sendMediaFeishu({
-    cfg: params.cfg,
-    to: `chat:${params.chatId}`,
-    mediaUrl: result.workbookPath,
-    replyToMessageId: params.replyToMessageId,
-    replyInThread: params.replyInThread,
-    accountId: params.accountId,
-    mediaLocalRoots: [JIUYAN_EXPORTS_DIR],
-  });
-  await sendMessageFeishu({
-    cfg: params.cfg,
-    to: `chat:${params.chatId}`,
-    text: result.message,
-    replyToMessageId: params.replyToMessageId,
-    replyInThread: params.replyInThread,
-    accountId: params.accountId,
-  });
+    },
+    buildJiuyanDirectExportDeliveryPlan(result),
+  );
   return true;
 }
 
