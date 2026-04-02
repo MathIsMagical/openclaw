@@ -36,7 +36,7 @@ async function sendJiuyanFeishuDeliveryPlan(
   },
   plan: JiuyanDirectDeliveryPlan,
 ): Promise<void> {
-  if (!params.skipStartMessage) {
+  if (!params.skipStartMessage && plan.startMessage.trim()) {
     await sendMessageFeishu({
       cfg: params.cfg,
       to: `chat:${params.chatId}`,
@@ -95,9 +95,19 @@ async function maybeHandleJiuyanFeishuDirectImport(params: {
   }
 
   params.log?.(`feishu[${params.accountId ?? "default"}]: handling Jiuyan import directly`);
+  const inputPaths = collectInputPaths(params.mediaList, params.quotedMediaList);
+  const startedImport = inputPaths.length > 0;
+  if (startedImport) {
+    await sendMessageFeishu({
+      cfg: params.cfg,
+      to: `chat:${params.chatId}`,
+      text: "文件已收到，正在准备导入数据，导入完成后会提醒你。",
+      accountId: params.accountId,
+    });
+  }
   const result = await executeJiuyanDirectImport({
     messageText: params.messageText,
-    inputPaths: collectInputPaths(params.mediaList, params.quotedMediaList),
+    inputPaths,
   });
   if (!result) {
     return false;
@@ -110,6 +120,7 @@ async function maybeHandleJiuyanFeishuDirectImport(params: {
       chatId: params.chatId,
       replyToMessageId: params.replyToMessageId,
       replyInThread: params.replyInThread,
+      skipStartMessage: startedImport,
     },
     buildJiuyanDirectImportDeliveryPlan(result),
   );
