@@ -19,6 +19,12 @@ describe("parseJiuyanExportIntent", () => {
       yesterdayTop: 100,
       fileScope: false,
     });
+    expect(parseJiuyanExportIntent("/AI生产计划 计算未来 5 个月需求 top 100 SKU")).toEqual({
+      prefix: "/AI生产计划",
+      months: 5,
+      yesterdayTop: 100,
+      fileScope: false,
+    });
     expect(parseJiuyanExportIntent("/生产计划 top 50")).toEqual({
       prefix: "/生产计划",
       yesterdayTop: 50,
@@ -48,6 +54,10 @@ describe("parseJiuyanExportIntent", () => {
   it("defaults bare /生产计划 with a referenced file to file-scope exports", () => {
     expect(parseJiuyanExportIntent("/生产计划", { defaultFileScope: true })).toEqual({
       prefix: "/生产计划",
+      fileScope: true,
+    });
+    expect(parseJiuyanExportIntent("/AI生产计划", { defaultFileScope: true })).toEqual({
+      prefix: "/AI生产计划",
       fileScope: true,
     });
     expect(parseJiuyanExportIntent("/公式预测", { defaultFileScope: true })).toEqual({
@@ -85,6 +95,18 @@ describe("parseJiuyanExportIntent", () => {
       prefix: "/生产计划",
       fileScope: false,
     });
+    expect(parseJiuyanExportIntent("/AI生产计划")).toEqual({
+      prefix: "/AI生产计划",
+      fileScope: false,
+    });
+    expect(parseJiuyanExportIntent("/AI 生产计划")).toEqual({
+      prefix: "/AI生产计划",
+      fileScope: false,
+    });
+    expect(parseJiuyanExportIntent("/ai 生产计划")).toEqual({
+      prefix: "/AI生产计划",
+      fileScope: false,
+    });
     expect(parseJiuyanExportIntent("/公式预测")).toEqual({
       prefix: "/公式预测",
       fileScope: false,
@@ -93,6 +115,8 @@ describe("parseJiuyanExportIntent", () => {
 
   it("ignores unrelated commands without Jiuyan export intent", () => {
     expect(parseJiuyanExportIntent("/生产计划 hi")).toBeNull();
+    expect(parseJiuyanExportIntent("/AI生产计划 hi")).toBeNull();
+    expect(parseJiuyanExportIntent("/AI 生产计划 hi")).toBeNull();
     expect(parseJiuyanExportIntent("计算需求")).toBeNull();
   });
 
@@ -107,6 +131,9 @@ describe("parseJiuyanExportIntent", () => {
 
   it("detects explicit Jiuyan command prefixes only", () => {
     expect(hasJiuyanDirectOpsCommand("/生产计划")).toBe(true);
+    expect(hasJiuyanDirectOpsCommand("/AI生产计划")).toBe(true);
+    expect(hasJiuyanDirectOpsCommand("/AI 生产计划")).toBe(true);
+    expect(hasJiuyanDirectOpsCommand("/ai生产计划")).toBe(true);
     expect(hasJiuyanDirectOpsCommand("/导入数据库")).toBe(true);
     expect(hasJiuyanDirectOpsCommand("请帮我分析这个表格")).toBe(false);
     expect(hasJiuyanDirectOpsCommand("financials.xlsx")).toBe(false);

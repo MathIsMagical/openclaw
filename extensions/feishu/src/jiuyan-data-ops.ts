@@ -11,6 +11,7 @@ import {
   executeJiuyanDirectImport,
   isJiuyanScopeInputPath,
   JIUYAN_EXPORTS_DIR,
+  TIMESFM_OUTPUTS_DIR,
   type JiuyanDirectDeliveryPlan,
 } from "./jiuyan-direct-ops-runtime.js";
 import { sendMediaFeishu } from "./media.js";
@@ -31,15 +32,18 @@ async function sendJiuyanFeishuDeliveryPlan(
     chatId: string;
     replyToMessageId: string;
     replyInThread: boolean;
+    skipStartMessage?: boolean;
   },
   plan: JiuyanDirectDeliveryPlan,
 ): Promise<void> {
-  await sendMessageFeishu({
-    cfg: params.cfg,
-    to: `chat:${params.chatId}`,
-    text: plan.startMessage,
-    accountId: params.accountId,
-  });
+  if (!params.skipStartMessage) {
+    await sendMessageFeishu({
+      cfg: params.cfg,
+      to: `chat:${params.chatId}`,
+      text: plan.startMessage,
+      accountId: params.accountId,
+    });
+  }
 
   for (const delivery of plan.deliveries) {
     if (delivery.kind === "text") {
@@ -60,7 +64,7 @@ async function sendJiuyanFeishuDeliveryPlan(
       replyToMessageId: params.replyToMessageId,
       replyInThread: params.replyInThread,
       accountId: params.accountId,
-      mediaLocalRoots: [JIUYAN_EXPORTS_DIR],
+      mediaLocalRoots: [JIUYAN_EXPORTS_DIR, TIMESFM_OUTPUTS_DIR],
     });
     if (delivery.text) {
       await sendMessageFeishu({
@@ -125,11 +129,23 @@ async function maybeHandleJiuyanFeishuDirectExport(params: {
 }): Promise<boolean> {
   const inputPaths = collectInputPaths(params.mediaList, params.quotedMediaList);
   const hasDefaultScopeFile = inputPaths.some((inputPath) => isJiuyanScopeInputPath(inputPath));
-  if (!parseJiuyanExportIntent(params.messageText, { defaultFileScope: hasDefaultScopeFile })) {
+  const intent = parseJiuyanExportIntent(params.messageText, {
+    defaultFileScope: hasDefaultScopeFile,
+  });
+  if (!intent) {
     return false;
   }
 
   params.log?.(`feishu[${params.accountId ?? "default"}]: handling Jiuyan export directly`);
+  await sendMessageFeishu({
+    cfg: params.cfg,
+    to: `chat:${params.chatId}`,
+    text:
+      intent.prefix === "/AI生产计划"
+        ? "正在准备 AI 生产计划，完成后立刻会把结果文件发给你。"
+        : "正在准备生产计划，完成后立刻会把结果文件发给你。",
+    accountId: params.accountId,
+  });
   const result = await executeJiuyanDirectExport({
     messageText: params.messageText,
     inputPaths,
@@ -145,6 +161,7 @@ async function maybeHandleJiuyanFeishuDirectExport(params: {
       chatId: params.chatId,
       replyToMessageId: params.replyToMessageId,
       replyInThread: params.replyInThread,
+      skipStartMessage: true,
     },
     buildJiuyanDirectExportDeliveryPlan(result),
   );
