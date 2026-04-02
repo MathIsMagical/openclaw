@@ -154,6 +154,7 @@
   "runtime-store",
   "json-store",
   "persistent-dedupe",
+  "jiuyan-direct-ops",
   "keyed-async-queue",
   "line",
   "line-core",
