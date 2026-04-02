@@ -8,7 +8,7 @@ import {
   hasJiuyanDirectOpsCommand,
   parseJiuyanExportIntent,
   parseJiuyanImportIntent,
-} from "./jiuyan-data-ops-intent.js";
+} from "openclaw/plugin-sdk/jiuyan-direct-ops";
 import { maybeHandleJiuyanFeishuDirectOps } from "./jiuyan-data-ops.js";
 
 describe("parseJiuyanExportIntent", () => {
