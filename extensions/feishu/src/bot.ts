@@ -3,6 +3,7 @@ import {
   resolveConfiguredBindingRoute,
 } from "openclaw/plugin-sdk/conversation-runtime";
 import { getSessionBindingService } from "openclaw/plugin-sdk/conversation-runtime";
+import { hasJiuyanDirectOpsCommand } from "openclaw/plugin-sdk/jiuyan-direct-ops";
 import { deriveLastRoutePolicy } from "openclaw/plugin-sdk/routing";
 import { resolveAgentIdFromSessionKey } from "openclaw/plugin-sdk/routing";
 import type { ClawdbotConfig, RuntimeEnv } from "../runtime-api.js";
@@ -35,7 +36,6 @@ import { type FeishuPermissionError, resolveFeishuSenderName } from "./bot-sende
 import { createFeishuClient } from "./client.js";
 import { finalizeFeishuMessageProcessing, tryRecordMessagePersistent } from "./dedup.js";
 import { maybeCreateDynamicAgent } from "./dynamic-agent.js";
-import { hasJiuyanDirectOpsCommand } from "./jiuyan-data-ops-intent.js";
 import { maybeHandleJiuyanFeishuDirectOps } from "./jiuyan-data-ops.js";
 import { extractMentionTargets, isMentionForwardRequest } from "./mention.js";
 import {

@@ -130,6 +130,7 @@
   "request-url",
   "runtime-store",
   "json-store",
+  "jiuyan-direct-ops",
   "keyed-async-queue",
   "line",
   "line-core",
