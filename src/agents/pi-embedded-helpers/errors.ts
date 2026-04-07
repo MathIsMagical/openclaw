@@ -1049,11 +1049,18 @@ export function sanitizeUserFacingText(text: unknown, opts?: { errorContext?: bo
     return raw;
   }
   const errorContext = opts?.errorContext ?? false;
-  // Prefer explicit <final> sections when present so any leaked preamble
-  // (for example stray "think" text) never reaches chat surfaces.
-  const stripped = stripInternalRuntimeContext(
-    extractFinalTaggedContent(raw) ?? stripFinalTagsFromText(raw),
-  );
+  let baseText = stripFinalTagsFromText(raw);
+  const finalExtracted = extractFinalTaggedContent(raw);
+  if (finalExtracted !== null) {
+    const trimmedRaw = raw.trim();
+    // Prefer extraction only when we detect a clear leaked preamble (like a "think" block)
+    // that would otherwise clutter the user-facing output.
+    if (trimmedRaw.startsWith("think") || trimmedRaw.startsWith("<think>")) {
+      baseText = finalExtracted;
+    }
+  }
+
+  const stripped = stripInternalRuntimeContext(baseText);
   const trimmed = stripped.trim();
   if (!trimmed) {
     return "";

@@ -15,9 +15,18 @@ export function resolvePnpmRunner(params = {}) {
   const comSpec = params.comSpec ?? process.env.ComSpec ?? "cmd.exe";
 
   if (typeof npmExecPath === "string" && npmExecPath.length > 0 && isPnpmExecPath(npmExecPath)) {
+    const isJavaScriptEntrypoint =
+      npmExecPath.endsWith(".js") || npmExecPath.endsWith(".cjs") || npmExecPath.endsWith(".mjs");
+    if (isJavaScriptEntrypoint) {
+      return {
+        command: nodeExecPath,
+        args: [...nodeArgs, npmExecPath, ...pnpmArgs],
+        shell: false,
+      };
+    }
     return {
-      command: nodeExecPath,
-      args: [...nodeArgs, npmExecPath, ...pnpmArgs],
+      command: npmExecPath,
+      args: pnpmArgs,
       shell: false,
     };
   }
