@@ -481,6 +481,11 @@ export const TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
       title: "Web Fetch",
       detailKeys: ["url", "extractMode", "maxChars"],
     },
+    tencent_news: {
+      emoji: "📰",
+      title: "Tencent News",
+      detailKeys: ["command"],
+    },
     code_execution: {
       emoji: "🧮",
       title: "Code Execution",
