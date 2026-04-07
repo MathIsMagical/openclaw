@@ -728,13 +728,6 @@
         "maxChars"
       ]
     },
-    "tencent_news": {
-      "emoji": "📰",
-      "title": "Tencent News",
-      "detailKeys": [
-        "command"
-      ]
-    },
     "code_execution": {
       "emoji": "🧮",
       "title": "Code Execution",
