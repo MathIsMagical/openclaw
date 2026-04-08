@@ -508,6 +508,7 @@ async function executeJiuyanAiDirectExport(params: {
 
   const forecastArgs = [
     TIMESFM_FORECAST_SCRIPT,
+    "--refine",
     ...(params.intent.months ? ["--horizon", String(params.intent.months)] : []),
     ...(scopeSkuCodes.length > 0 ? ["--skus", scopeSkuCodes.join(",")] : []),
     ...(params.intent.yesterdayTop && !params.intent.fileScope
