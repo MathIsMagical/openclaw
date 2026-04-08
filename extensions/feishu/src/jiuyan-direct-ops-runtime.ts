@@ -37,6 +37,8 @@ const TIMESFM_PYTHON =
 const TIMESFM_CLEAR_XLSX_SCRIPT = path.join(TIMESFM_JIUYAN_SALES_DIR, "clear_xlsx.py");
 const TIMESFM_FORECAST_SCRIPT = path.join(TIMESFM_JIUYAN_SALES_DIR, "forecast_jiuyan.py");
 const TIMESFM_EXPORT_SCRIPT = path.join(TIMESFM_JIUYAN_SALES_DIR, "export_forecast.py");
+const TIMESFM_CLEAR_MD_SCRIPT = path.join(TIMESFM_JIUYAN_SALES_DIR, "clear_md.py");
+const TIMESFM_DIFF_REPORT_SCRIPT = path.join(TIMESFM_JIUYAN_SALES_DIR, "generate_diff_report.py");
 
 type ShellResult = {
   stdout: string;
@@ -127,6 +129,7 @@ export type JiuyanDirectExportExecutionResult =
       scopeSummary: string;
       completionIntro: string;
       months?: number;
+      diffReportPath?: string;
       workbookPaths?: never;
     }
   | {
@@ -138,6 +141,7 @@ export type JiuyanDirectExportExecutionResult =
       scopeSummary: string;
       completionIntro: string;
       months?: number;
+      diffReportPath?: string;
     };
 
 export type JiuyanDirectDeliveryItem =
@@ -186,6 +190,43 @@ async function runTimesfmPython(args: readonly string[]): Promise<ShellResult> {
     stderr,
     combined: [stdout, stderr].filter(Boolean).join("\n").trim(),
   };
+}
+
+function shellResultFromExecError(error: unknown): ShellResult {
+  if (error && typeof error === "object") {
+    const maybeStdout = "stdout" in error ? error.stdout : "";
+    const maybeStderr = "stderr" in error ? error.stderr : "";
+    const stdout = typeof maybeStdout === "string" ? maybeStdout : "";
+    const stderr = typeof maybeStderr === "string" ? maybeStderr : "";
+    const fallback =
+      error instanceof Error ? error.message : typeof error === "string" ? error : String(error);
+    return {
+      stdout,
+      stderr,
+      combined: [stdout, stderr, fallback].filter(Boolean).join("\n").trim(),
+    };
+  }
+  return {
+    stdout: "",
+    stderr: "",
+    combined: error instanceof Error ? error.message : String(error),
+  };
+}
+
+async function runTimesfmPythonSafe(
+  args: readonly string[],
+): Promise<{ ok: true; result: ShellResult } | { ok: false; result: ShellResult }> {
+  try {
+    return { ok: true, result: await runTimesfmPython(args) };
+  } catch (error) {
+    return { ok: false, result: shellResultFromExecError(error) };
+  }
+}
+
+function extractDiffReportPath(output: string): string | undefined {
+  const match = output.match(/报告已生成:\s*(.+)$/m);
+  const candidate = match?.[1]?.trim();
+  return candidate && candidate.length > 0 ? candidate : undefined;
 }
 
 async function readSkuCodesFromScopeFile(filePath: string): Promise<string[]> {
@@ -464,6 +505,14 @@ async function listTimesfmOutputWorkbooks(): Promise<string[]> {
     .toSorted((left, right) => left.localeCompare(right, "zh-CN"));
 }
 
+async function listTimesfmOutputMarkdownReports(): Promise<string[]> {
+  const entries = await fs.readdir(TIMESFM_OUTPUTS_DIR, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && /\.md$/i.test(entry.name))
+    .map((entry) => path.join(TIMESFM_OUTPUTS_DIR, entry.name))
+    .toSorted((left, right) => left.localeCompare(right, "zh-CN"));
+}
+
 async function executeJiuyanAiDirectExport(params: {
   intent: JiuyanExportIntent;
   inputPaths: readonly string[];
@@ -527,6 +576,20 @@ async function executeJiuyanAiDirectExport(params: {
   ];
   await runTimesfmPython(exportArgs);
 
+  let diffReportPath: string | undefined;
+  const clearMdResult = await runTimesfmPythonSafe([TIMESFM_CLEAR_MD_SCRIPT]);
+  if (clearMdResult.ok) {
+    const diffReportResult = await runTimesfmPythonSafe([TIMESFM_DIFF_REPORT_SCRIPT]);
+    if (diffReportResult.ok) {
+      const generatedPath = extractDiffReportPath(diffReportResult.result.combined);
+      const markdownPaths = await listTimesfmOutputMarkdownReports();
+      const resolvedPath = generatedPath ?? markdownPaths.at(-1);
+      if (resolvedPath && existsSync(resolvedPath)) {
+        diffReportPath = resolvedPath;
+      }
+    }
+  }
+
   const workbookPaths = await listTimesfmOutputWorkbooks();
   if (workbookPaths.length === 0) {
     throw new Error(`Jiuyan AI export did not produce any .xlsx files in ${TIMESFM_OUTPUTS_DIR}.`);
@@ -544,11 +607,13 @@ async function executeJiuyanAiDirectExport(params: {
       params.intent.months ? `需求月份：未来 ${params.intent.months} 个月` : undefined,
       `SKU 范围：${scopeSummary}`,
       `输出文件：${workbookPaths.length} 个`,
+      diffReportPath ? "AI 差异报告已生成，Markdown 已发送。" : undefined,
     ]
       .filter(Boolean)
       .join("\n"),
     scopeSummary,
     completionIntro,
+    ...(diffReportPath ? { diffReportPath } : {}),
     ...(params.intent.months ? { months: params.intent.months } : {}),
   };
 }
@@ -696,6 +761,7 @@ export function buildJiuyanDirectExportDeliveryPlan(
 ): JiuyanDirectDeliveryPlan {
   const workbookPaths = result.outcome === "success" ? result.workbookPaths : undefined;
   const isMultiWorkbookExport = Array.isArray(workbookPaths);
+  const diffReportPath = result.outcome === "success" ? result.diffReportPath : undefined;
   let deliveries: JiuyanDirectDeliveryItem[];
   if (result.outcome === "needs_input") {
     deliveries = [{ kind: "text", text: result.message }];
@@ -703,14 +769,30 @@ export function buildJiuyanDirectExportDeliveryPlan(
     deliveries = workbookPaths.map((filePath, index) => ({
       kind: "file",
       filePath,
-      ...(index === workbookPaths.length - 1 ? { text: result.message } : {}),
+      ...(index === workbookPaths.length - 1 && !diffReportPath ? { text: result.message } : {}),
     }));
+    if (diffReportPath) {
+      deliveries.push({
+        kind: "file",
+        filePath: diffReportPath,
+        text: result.message,
+      });
+    }
   } else {
     const workbookPath = result.workbookPath;
     if (!workbookPath) {
       throw new Error("Jiuyan export result is missing workbookPath.");
     }
-    deliveries = [{ kind: "file", filePath: workbookPath, text: result.message }];
+    deliveries = [
+      {
+        kind: "file",
+        filePath: workbookPath,
+        ...(diffReportPath ? {} : { text: result.message }),
+      },
+      ...(diffReportPath
+        ? [{ kind: "file" as const, filePath: diffReportPath, text: result.message }]
+        : []),
+    ];
   }
   return {
     startMessage:
