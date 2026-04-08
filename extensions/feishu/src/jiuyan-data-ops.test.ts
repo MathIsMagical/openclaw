@@ -57,6 +57,19 @@ describe("parseJiuyanExportIntent", () => {
     });
   });
 
+  it("accepts bare month shorthands for production-plan commands", () => {
+    expect(parseJiuyanExportIntent("/生产计划 5个月")).toEqual({
+      prefix: "/生产计划",
+      months: 5,
+      fileScope: false,
+    });
+    expect(parseJiuyanExportIntent("/AI生产计划 5 个月")).toEqual({
+      prefix: "/AI生产计划",
+      months: 5,
+      fileScope: false,
+    });
+  });
+
   it("parses last-month scope from /销量计算 commands", () => {
     expect(
       parseJiuyanExportIntent("/销量计算 更新上个月 top 800 sku，未来 6 个月生产计划表"),
