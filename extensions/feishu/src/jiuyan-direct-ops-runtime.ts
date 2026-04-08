@@ -208,6 +208,7 @@ async function readSkuCodesFromScopeFile(filePath: string): Promise<string[]> {
   } catch (error) {
     throw new Error(
       `Failed to read SKU scope from ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
     );
   }
 }
@@ -460,7 +461,7 @@ async function listTimesfmOutputWorkbooks(): Promise<string[]> {
   return entries
     .filter((entry) => entry.isFile() && /\.xlsx$/i.test(entry.name))
     .map((entry) => path.join(TIMESFM_OUTPUTS_DIR, entry.name))
-    .sort((left, right) => left.localeCompare(right, "zh-CN"));
+    .toSorted((left, right) => left.localeCompare(right, "zh-CN"));
 }
 
 async function executeJiuyanAiDirectExport(params: {
@@ -507,6 +508,7 @@ async function executeJiuyanAiDirectExport(params: {
 
   const forecastArgs = [
     TIMESFM_FORECAST_SCRIPT,
+    "--refine",
     ...(params.intent.months ? ["--horizon", String(params.intent.months)] : []),
     ...(scopeSkuCodes.length > 0 ? ["--skus", scopeSkuCodes.join(",")] : []),
     ...(params.intent.yesterdayTop && !params.intent.fileScope
