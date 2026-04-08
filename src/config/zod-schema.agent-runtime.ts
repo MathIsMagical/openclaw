@@ -952,6 +952,12 @@ export const ToolsSchema = z
       })
       .strict()
       .optional(),
+    tencentNews: z
+      .object({
+        binaryPath: z.string().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

@@ -691,6 +691,11 @@ export const TOOL_DISPLAY_CONFIG: ToolDisplayConfig = {
       title: "TTS",
       detailKeys: ["text", "channel"],
     },
+    tencent_news: {
+      emoji: "📰",
+      title: "Tencent News",
+      detailKeys: ["command", "query"],
+    },
   },
 };
 

@@ -151,6 +151,11 @@ export type MediaToolsConfig = {
   video?: MediaUnderstandingConfig;
 };
 
+export type TencentNewsConfig = {
+  /** Optional absolute path to the tencent-news-cli binary. */
+  binaryPath?: string;
+};
+
 export type ToolProfileId = "minimal" | "coding" | "messaging" | "full";
 
 export type ToolLoopDetectionDetectorConfig = {
@@ -647,4 +652,6 @@ export type ToolsConfig = {
     /** Enable the structured `update_plan` tool explicitly outside strict-agentic execution mode. */
     planTool?: boolean;
   };
+  /** Tencent News tool configuration. */
+  tencentNews?: TencentNewsConfig;
 };

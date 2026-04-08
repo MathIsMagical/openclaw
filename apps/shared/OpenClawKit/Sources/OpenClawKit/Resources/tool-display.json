@@ -1105,6 +1105,14 @@
         "text",
         "channel"
       ]
+    },
+    "tencent_news": {
+      "emoji": "📰",
+      "title": "Tencent News",
+      "detailKeys": [
+        "command",
+        "query"
+      ]
     }
   }
 }
