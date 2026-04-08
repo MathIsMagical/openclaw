@@ -63,6 +63,7 @@ type JiuyanSalesImportSummary = {
   new_rows: number;
   new_sku_count: number;
   updated_rows: number;
+  current_sales_date?: string | null;
   new_sales_volume: number;
   new_date_range?: {
     start?: string | null;
@@ -86,6 +87,7 @@ type JiuyanSkusImportSummary = {
   inventory_updated_sku_count: number;
   new_sku_count: number;
   updated_sku_count: number;
+  inventory_snapshot_date?: string | null;
   invalid_barcode_count?: number;
   filtered_out_by_category_count?: number;
   new_skus?: Array<{
@@ -385,8 +387,8 @@ function formatDocUpdateLines(docUpdates: readonly JiuyanDocUpdate[] | undefined
   });
 }
 
-function buildSalesImportSuccessMessage(summary: JiuyanSalesImportSummary): string {
-  const lines = ["销售数据更新成功！", `新增 SKU：${summary.new_sku_count} 个`];
+export function buildSalesImportSuccessMessage(summary: JiuyanSalesImportSummary): string {
+  const lines = ["销售数据更新成功！"];
   const skippedNewSkus = summary.skipped_new_skus ?? [];
   if (skippedNewSkus.length > 0) {
     lines.push(`跳过新增 SKU：${skippedNewSkus.length} 个`);
@@ -409,16 +411,18 @@ function buildSalesImportSuccessMessage(summary: JiuyanSalesImportSummary): stri
     }
   }
   lines.push(`新增销售记录：${summary.new_rows} 条`);
+  lines.push(`覆盖更新记录：${summary.updated_rows} 条`);
   lines.push(
     summary.new_date_range?.start || summary.new_date_range?.end
       ? `新增时间范围：${summary.new_date_range?.start ?? "未知"} ~ ${summary.new_date_range?.end ?? "未知"}`
       : "新增时间范围：无新增数据",
   );
+  lines.push(`当前销售数据更新到：${summary.current_sales_date ?? "未知"}`);
   lines.push(...formatDocUpdateLines(summary.doc_updates));
   return lines.join("\n");
 }
 
-function buildSkusImportSuccessMessage(summary: JiuyanSkusImportSummary): string {
+export function buildSkusImportSuccessMessage(summary: JiuyanSkusImportSummary): string {
   const lines = ["SKU 数据更新成功！", `新增 SKU：${summary.new_sku_count} 个`];
   const newSkus = summary.new_skus ?? [];
   if (newSkus.length > 0) {
@@ -440,6 +444,7 @@ function buildSkusImportSuccessMessage(summary: JiuyanSkusImportSummary): string
   ) {
     lines.push(`分类过滤跳过：${summary.filtered_out_by_category_count} 行`);
   }
+  lines.push(`上次库存和在途数据更新时间：${summary.inventory_snapshot_date ?? "未知"}`);
   lines.push(...formatDocUpdateLines(summary.doc_updates));
   return lines.join("\n");
 }
