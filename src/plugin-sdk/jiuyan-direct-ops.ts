@@ -89,7 +89,8 @@ export function parseJiuyanExportIntent(
     /计算需求|更新生产计划表|更新生产计划|计算销量/i.test(normalized) ||
     /top\s*\d+(?:\s*sku)?/i.test(normalized) ||
     /表中\s*sku/i.test(normalized) ||
-    /未来?\s*\d+\s*个?月/i.test(normalized);
+    /未来?\s*\d+\s*个?月/i.test(normalized) ||
+    /^\d+\s*个?月$/i.test(normalized);
   if (!hasExportIntent) {
     return null;
   }
