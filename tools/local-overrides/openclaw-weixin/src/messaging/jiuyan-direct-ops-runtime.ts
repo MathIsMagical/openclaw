@@ -14,8 +14,14 @@ const execFileAsync = promisify(execFile);
 export const JIUYAN_ROOT = "/Users/andychan/Documents/jiuyan";
 export const JIUYAN_EXPORTS_DIR = path.join(JIUYAN_ROOT, "exports");
 const JIUYAN_UTILS_DIR = path.join(JIUYAN_ROOT, "utils");
+const JIUYAN_DB_PATH = path.join(
+  JIUYAN_ROOT,
+  "sales_filtered_database",
+  "sales_filtered.sqlite",
+);
 const JIUYAN_SCOPE_INPUT_DIR = path.join(JIUYAN_EXPORTS_DIR, "_scope_inputs");
 const JIUYAN_UPLOAD_DIR = path.join(JIUYAN_ROOT, "upload");
+const JIUYAN_TARGET_CATEGORIES = ["线组", "鱼钩", "加长子线", "无结子线"] as const;
 const JIUYAN_PYTHON_CANDIDATES = [
   path.join(JIUYAN_ROOT, ".venv", "bin", "python"),
   path.join(JIUYAN_ROOT, "sales_filtered_database", ".venv", "bin", "python"),
@@ -130,6 +136,7 @@ export type JiuyanDirectExportExecutionResult =
       message: string;
       scopeSummary: string;
       completionIntro: string;
+      skuCount?: number;
       months?: number;
       diffReportPath?: string;
       workbookPaths?: never;
@@ -142,6 +149,7 @@ export type JiuyanDirectExportExecutionResult =
       message: string;
       scopeSummary: string;
       completionIntro: string;
+      skuCount?: number;
       months?: number;
       diffReportPath?: string;
     };
@@ -254,6 +262,34 @@ async function readSkuCodesFromScopeFile(filePath: string): Promise<string[]> {
       { cause: error },
     );
   }
+}
+
+async function countJiuyanTargetCategorySkus(): Promise<number> {
+  const placeholders = JIUYAN_TARGET_CATEGORIES.map(() => "?").join(",");
+  const result = await execFileAsync(
+    JIUYAN_PYTHON,
+    [
+      "-c",
+      [
+        "import sqlite3, json",
+        `conn = sqlite3.connect(${JSON.stringify(JIUYAN_DB_PATH)})`,
+        `row = conn.execute("SELECT COUNT(*) FROM dim_sku WHERE product_category IN (${placeholders})", ${JSON.stringify([...JIUYAN_TARGET_CATEGORIES])}).fetchone()`,
+        "print(int(row[0] or 0))",
+      ].join("; "),
+    ],
+    {
+      cwd: JIUYAN_ROOT,
+      maxBuffer: 1024 * 1024,
+    },
+  );
+  return Number(result.stdout.trim() || "0");
+}
+
+function buildAiProductionPlanStartMessage(skuCount?: number): string {
+  if (typeof skuCount === "number" && skuCount > 500) {
+    return `正在准备 AI 生产计划，总共有 ${skuCount} 个 sku 需要处理，需要的时间较长，请耐心等待，完成后我会把结果文件发给你。`;
+  }
+  return "正在准备 AI 生产计划，完成后立刻会把结果文件发给你。";
 }
 
 async function createTimesfmScopeCsv(params: {
@@ -389,36 +425,9 @@ function formatDocUpdateLines(docUpdates: readonly JiuyanDocUpdate[] | undefined
 
 export function buildSalesImportSuccessMessage(summary: JiuyanSalesImportSummary): string {
   const lines = ["销售数据更新成功！"];
-  const skippedNewSkus = summary.skipped_new_skus ?? [];
-  if (skippedNewSkus.length > 0) {
-    lines.push(`跳过新增 SKU：${skippedNewSkus.length} 个`);
-    lines.push("跳过条码列表：");
-    for (const item of skippedNewSkus.slice(0, 20)) {
-      lines.push(`${item.barcode} | ${item.reason}`);
-    }
-    if (skippedNewSkus.length > 20) {
-      lines.push(`其余 ${skippedNewSkus.length - 20} 个条码已省略`);
-    }
-  }
-  const newSkuSales = summary.new_sku_sales ?? [];
-  if (newSkuSales.length > 0) {
-    lines.push("新增 SKU 列表：");
-    for (const item of newSkuSales.slice(0, 12)) {
-      lines.push(`${item.barcode} | ${item.family} | ${item.sales_volume}`);
-    }
-    if (newSkuSales.length > 12) {
-      lines.push(`其余 ${newSkuSales.length - 12} 个 SKU 已省略`);
-    }
-  }
   lines.push(`新增销售记录：${summary.new_rows} 条`);
   lines.push(`覆盖更新记录：${summary.updated_rows} 条`);
-  lines.push(
-    summary.new_date_range?.start || summary.new_date_range?.end
-      ? `新增时间范围：${summary.new_date_range?.start ?? "未知"} ~ ${summary.new_date_range?.end ?? "未知"}`
-      : "新增时间范围：无新增数据",
-  );
   lines.push(`当前销售数据更新到：${summary.current_sales_date ?? "未知"}`);
-  lines.push(...formatDocUpdateLines(summary.doc_updates));
   return lines.join("\n");
 }
 
@@ -490,7 +499,7 @@ function buildScopeSummary(intent: JiuyanExportIntent): string {
   if (intent.yesterdayTop) {
     return `昨天 Top ${intent.yesterdayTop} SKU`;
   }
-  return "默认范围";
+  return "全量 SKU";
 }
 
 function buildCompletionIntro(intent: JiuyanExportIntent): string {
@@ -540,6 +549,7 @@ async function executeJiuyanAiDirectExport(params: {
   let scopeWorkbookPath: string | undefined;
   let timesfmScopeFilePath: string | undefined;
   let scopeSkuCodes: string[] = [];
+  let aiSkuCount: number | undefined;
   if (scopeArgs.length > 0) {
     const scopeResult = await runJiuyanPython([SELECT_EXPORT_SKUS_SCRIPT, ...scopeArgs]);
     scopeWorkbookPath = resolveExportWorkbookPath(scopeResult.combined) ?? undefined;
@@ -558,11 +568,20 @@ async function executeJiuyanAiDirectExport(params: {
       scopeWorkbookPath,
       skuCodes: scopeSkuCodes,
     });
+    aiSkuCount = scopeSkuCodes.length;
+  }
+  if (typeof aiSkuCount !== "number") {
+    aiSkuCount =
+      params.intent.yesterdayTop ??
+      params.intent.lastMonthTop ??
+      (await countJiuyanTargetCategorySkus());
   }
 
   const forecastArgs = [
     TIMESFM_FORECAST_SCRIPT,
     "--refine",
+    "--min-months",
+    "9",
     ...(params.intent.months ? ["--horizon", String(params.intent.months)] : []),
     ...(scopeSkuCodes.length > 0 ? ["--skus", scopeSkuCodes.join(",")] : []),
     ...(params.intent.yesterdayTop && !params.intent.fileScope
@@ -611,13 +630,14 @@ async function executeJiuyanAiDirectExport(params: {
       completionIntro,
       params.intent.months ? `需求月份：未来 ${params.intent.months} 个月` : undefined,
       `SKU 范围：${scopeSummary}`,
-      `输出文件：${workbookPaths.length} 个`,
-      diffReportPath ? "AI 差异报告已生成，Markdown 已发送。" : undefined,
+      `输出 生产计划文件：${workbookPaths.length} 个`,
+      diffReportPath ? "较上一份 AI 生产计划的差异报告已生成，Markdown 文件已发送。" : undefined,
     ]
       .filter(Boolean)
       .join("\n"),
     scopeSummary,
     completionIntro,
+    skuCount: aiSkuCount,
     ...(diffReportPath ? { diffReportPath } : {}),
     ...(params.intent.months ? { months: params.intent.months } : {}),
   };
@@ -803,7 +823,7 @@ export function buildJiuyanDirectExportDeliveryPlan(
       result.outcome === "needs_input"
         ? "正在准备生产计划，完成后立刻会把结果文件发给你。"
         : isMultiWorkbookExport
-          ? "正在准备 AI 生产计划，完成后立刻会把结果文件发给你。"
+          ? buildAiProductionPlanStartMessage(result.skuCount)
           : "正在准备生产计划，完成后立刻会把结果文件发给你。",
     deliveries,
   };
