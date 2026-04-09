@@ -29,6 +29,55 @@ describe("buildJiuyanDirectImportDeliveryPlan", () => {
 });
 
 describe("buildJiuyanDirectExportDeliveryPlan", () => {
+  it("uses the long AI start message when more than 500 skus are being processed", () => {
+    expect(
+      buildJiuyanDirectExportDeliveryPlan({
+        kind: "export",
+        outcome: "success",
+        workbookPaths: ["/tmp/ai-forecast.xlsx"],
+        skuCount: 666,
+        message: "AI 生产计划已生成，Excel 已发送。",
+        scopeSummary: "全量 SKU",
+        completionIntro: "AI 生产计划已生成，Excel 已发送。",
+      }).startMessage,
+    ).toBe(
+      "正在准备 AI 生产计划，总共有 666 个 sku 需要处理，需要的时间较长，请耐心等待，完成后我会把结果文件发给你。",
+    );
+  });
+
+  it("keeps the original AI start message when 500 or fewer skus are being processed", () => {
+    expect(
+      buildJiuyanDirectExportDeliveryPlan({
+        kind: "export",
+        outcome: "success",
+        workbookPaths: ["/tmp/ai-forecast.xlsx"],
+        skuCount: 500,
+        message: "AI 生产计划已生成，Excel 已发送。",
+        scopeSummary: "全量 SKU",
+        completionIntro: "AI 生产计划已生成，Excel 已发送。",
+      }).startMessage,
+    ).toBe("正在准备 AI 生产计划，完成后立刻会把结果文件发给你。");
+  });
+
+  it("uses 全量 SKU as the default scope label in completion messages", () => {
+    expect(
+      buildJiuyanDirectExportDeliveryPlan({
+        kind: "export",
+        outcome: "success",
+        workbookPaths: ["/tmp/ai-forecast.xlsx"],
+        message:
+          "AI 生产计划已生成，Excel 已发送。\n需求月份：未来 5 个月\nSKU 范围：全量 SKU\n输出 生产计划文件：1 个",
+        scopeSummary: "全量 SKU",
+        completionIntro: "AI 生产计划已生成，Excel 已发送。",
+      }).deliveries.at(0),
+    ).toEqual({
+      kind: "file",
+      filePath: "/tmp/ai-forecast.xlsx",
+      text:
+        "AI 生产计划已生成，Excel 已发送。\n需求月份：未来 5 个月\nSKU 范围：全量 SKU\n输出 生产计划文件：1 个",
+    });
+  });
+
   it("appends the markdown diff report after AI workbook deliveries", () => {
     expect(
       buildJiuyanDirectExportDeliveryPlan({
@@ -36,8 +85,9 @@ describe("buildJiuyanDirectExportDeliveryPlan", () => {
         outcome: "success",
         workbookPaths: ["/tmp/ai-forecast.xlsx"],
         diffReportPath: "/tmp/20260409_20260408_diff_report.md",
-        message: "AI 生产计划已生成，Excel 已发送。\nAI 差异报告已生成，Markdown 已发送。",
-        scopeSummary: "默认范围",
+        message:
+          "AI 生产计划已生成，Excel 已发送。\n需求月份：未来 5 个月\nSKU 范围：全量 SKU\n输出 生产计划文件：1 个\n较上一份 AI 生产计划的差异报告已生成，Markdown 文件已发送。",
+        scopeSummary: "全量 SKU",
         completionIntro: "AI 生产计划已生成，Excel 已发送。",
       }).deliveries,
     ).toEqual([
@@ -48,7 +98,8 @@ describe("buildJiuyanDirectExportDeliveryPlan", () => {
       {
         kind: "file",
         filePath: "/tmp/20260409_20260408_diff_report.md",
-        text: "AI 生产计划已生成，Excel 已发送。\nAI 差异报告已生成，Markdown 已发送。",
+        text:
+          "AI 生产计划已生成，Excel 已发送。\n需求月份：未来 5 个月\nSKU 范围：全量 SKU\n输出 生产计划文件：1 个\n较上一份 AI 生产计划的差异报告已生成，Markdown 文件已发送。",
       },
     ]);
   });
@@ -60,7 +111,7 @@ describe("buildJiuyanDirectExportDeliveryPlan", () => {
         outcome: "success",
         workbookPath: "/tmp/ai-forecast.xlsx",
         message: "AI 生产计划已生成，Excel 已发送。",
-        scopeSummary: "默认范围",
+        scopeSummary: "全量 SKU",
         completionIntro: "AI 生产计划已生成，Excel 已发送。",
       }).deliveries,
     ).toEqual([
@@ -93,13 +144,12 @@ describe("buildSalesImportSuccessMessage", () => {
         "销售数据更新成功！",
         "新增销售记录：0 条",
         "覆盖更新记录：14998 条",
-        "新增时间范围：无新增数据",
         "当前销售数据更新到：2026-04-07",
       ].join("\n"),
     );
   });
 
-  it("omits the sales-side SKU count line", () => {
+  it("omits sales-side detail sections beyond the four core lines", () => {
     expect(
       buildSalesImportSuccessMessage({
         kind: "sales",
@@ -110,10 +160,27 @@ describe("buildSalesImportSuccessMessage", () => {
         updated_rows: 14998,
         current_sales_date: "2026-04-07",
         new_sales_volume: 0,
-        new_date_range: {},
-        doc_updates: [],
+        new_date_range: {
+          start: "2026-04-07",
+          end: "2026-04-08",
+        },
+        new_sku_sales: [
+          {
+            barcode: "6941770827104",
+            family: "尤尼吉可|线组",
+            sales_volume: 221,
+          },
+        ],
+        doc_updates: [{ file: "foo", count: 1 }],
       }),
-    ).not.toContain("新增 SKU：");
+    ).toBe(
+      [
+        "销售数据更新成功！",
+        "新增销售记录：0 条",
+        "覆盖更新记录：14998 条",
+        "当前销售数据更新到：2026-04-07",
+      ].join("\n"),
+    );
   });
 });
 
