@@ -52,6 +52,10 @@ type ShellResult = {
   combined: string;
 };
 
+type JiuyanAiExportPreview = {
+  skuCount?: number;
+};
+
 type JiuyanDocUpdate = {
   file: string;
   count: number;
@@ -69,6 +73,7 @@ type JiuyanSalesImportSummary = {
   new_rows: number;
   new_sku_count: number;
   updated_rows: number;
+  invalid_barcode_count?: number;
   current_sales_date?: string | null;
   new_sales_volume: number;
   new_date_range?: {
@@ -292,6 +297,57 @@ function buildAiProductionPlanStartMessage(skuCount?: number): string {
   return "正在准备 AI 生产计划，完成后立刻会把结果文件发给你。";
 }
 
+async function resolveJiuyanAiExportPreview(params: {
+  intent: JiuyanExportIntent;
+  inputPaths: readonly string[];
+}): Promise<JiuyanAiExportPreview> {
+  if (params.intent.fileScope) {
+    const scopeInputPath = params.inputPaths.find((inputPath) => isJiuyanScopeInputPath(inputPath));
+    if (scopeInputPath) {
+      try {
+        return { skuCount: (await readSkuCodesFromScopeFile(scopeInputPath)).length };
+      } catch {
+        return {};
+      }
+    }
+  }
+
+  if (params.intent.yesterdayTop) {
+    return { skuCount: params.intent.yesterdayTop };
+  }
+  if (params.intent.lastMonthTop) {
+    return { skuCount: params.intent.lastMonthTop };
+  }
+
+  try {
+    return { skuCount: await countJiuyanTargetCategorySkus() };
+  } catch {
+    return {};
+  }
+}
+
+export async function buildJiuyanDirectExportStartMessagePreview(params: {
+  messageText: string;
+  inputPaths: readonly string[];
+}): Promise<string> {
+  const hasDefaultScopeFile = params.inputPaths.some((inputPath) => isJiuyanScopeInputPath(inputPath));
+  const intent = parseJiuyanExportIntent(params.messageText, {
+    defaultFileScope: hasDefaultScopeFile,
+  });
+  if (!intent) {
+    return "";
+  }
+  if (intent.prefix !== "/AI生产计划") {
+    return "正在准备生产计划，完成后立刻会把结果文件发给你。";
+  }
+
+  const preview = await resolveJiuyanAiExportPreview({
+    intent,
+    inputPaths: params.inputPaths,
+  });
+  return buildAiProductionPlanStartMessage(preview.skuCount);
+}
+
 async function createTimesfmScopeCsv(params: {
   scopeWorkbookPath: string;
   skuCodes: readonly string[];
@@ -427,6 +483,11 @@ export function buildSalesImportSuccessMessage(summary: JiuyanSalesImportSummary
   const lines = ["销售数据更新成功！"];
   lines.push(`新增销售记录：${summary.new_rows} 条`);
   lines.push(`覆盖更新记录：${summary.updated_rows} 条`);
+  const skippedInvalidRows =
+    (summary.invalid_barcode_count ?? 0) + (summary.skipped_new_skus?.length ?? 0);
+  if (skippedInvalidRows > 0) {
+    lines.push(`跳过无效数据：${skippedInvalidRows} 行`);
+  }
   lines.push(`当前销售数据更新到：${summary.current_sales_date ?? "未知"}`);
   return lines.join("\n");
 }

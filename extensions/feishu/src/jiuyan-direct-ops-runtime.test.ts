@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildJiuyanDirectExportStartMessagePreview,
   buildSalesImportSuccessMessage,
   buildSkusImportSuccessMessage,
   buildJiuyanDirectExportDeliveryPlan,
@@ -124,6 +125,26 @@ describe("buildJiuyanDirectExportDeliveryPlan", () => {
   });
 });
 
+describe("buildJiuyanDirectExportStartMessagePreview", () => {
+  it("uses the long AI start message for default full-sku AI exports", async () => {
+    await expect(
+      buildJiuyanDirectExportStartMessagePreview({
+        messageText: "/AI生产计划 5个月",
+        inputPaths: [],
+      }),
+    ).resolves.toContain("总共有");
+  });
+
+  it("keeps the short message for bounded top-N AI exports", async () => {
+    await expect(
+      buildJiuyanDirectExportStartMessagePreview({
+        messageText: "/AI生产计划 top 100 sku 5 个月",
+        inputPaths: [],
+      }),
+    ).resolves.toBe("正在准备 AI 生产计划，完成后立刻会把结果文件发给你。");
+  });
+});
+
 describe("buildSalesImportSuccessMessage", () => {
   it("matches the streamlined sales import wording", () => {
     expect(
@@ -179,6 +200,33 @@ describe("buildSalesImportSuccessMessage", () => {
         "新增销售记录：0 条",
         "覆盖更新记录：14998 条",
         "当前销售数据更新到：2026-04-07",
+      ].join("\n"),
+    );
+  });
+
+  it("shows a combined skipped invalid data line when invalid rows exist", () => {
+    expect(
+      buildSalesImportSuccessMessage({
+        kind: "sales",
+        file_rows: 18302,
+        file_sku_count: 3119,
+        new_rows: 14638,
+        new_sku_count: 0,
+        updated_rows: 14997,
+        invalid_barcode_count: 7,
+        current_sales_date: "2026-04-09",
+        new_sales_volume: 0,
+        new_date_range: {},
+        skipped_new_skus: [{ barcode: "6099040855945", reason: "商品名称为空" }],
+        doc_updates: [],
+      }),
+    ).toBe(
+      [
+        "销售数据更新成功！",
+        "新增销售记录：14638 条",
+        "覆盖更新记录：14997 条",
+        "跳过无效数据：8 行",
+        "当前销售数据更新到：2026-04-09",
       ].join("\n"),
     );
   });
