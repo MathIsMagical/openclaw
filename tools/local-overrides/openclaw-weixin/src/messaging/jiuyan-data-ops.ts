@@ -4,6 +4,7 @@ import {
 } from "openclaw/plugin-sdk/jiuyan-direct-ops";
 import { logger } from "../util/logger.js";
 import {
+  buildJiuyanDirectExportStartMessagePreview,
   buildJiuyanDirectExportDeliveryPlan,
   buildJiuyanDirectImportDeliveryPlan,
   executeJiuyanDirectExport,
@@ -110,12 +111,13 @@ async function maybeHandleJiuyanWeixinDirectExport(params: WeixinJiuyanParams): 
 
   params.log?.(`weixin[${params.accountId}]: handling Jiuyan export directly`);
   try {
+    const startMessage = await buildJiuyanDirectExportStartMessagePreview({
+      messageText: params.messageText,
+      inputPaths,
+    });
     await sendMessageWeixin({
       to: params.to,
-      text:
-        intent.prefix === "/AI生产计划"
-          ? "正在准备 AI 生产计划，完成后立刻会把结果文件发给你。"
-          : "正在准备生产计划，完成后立刻会把结果文件发给你。",
+      text: startMessage,
       opts: buildCommonOpts(params),
     });
     const result = await executeJiuyanDirectExport({

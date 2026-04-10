@@ -5,6 +5,7 @@ import {
 } from "openclaw/plugin-sdk/jiuyan-direct-ops";
 import type { ClawdbotConfig } from "../runtime-api.js";
 import {
+  buildJiuyanDirectExportStartMessagePreview,
   buildJiuyanDirectExportDeliveryPlan,
   buildJiuyanDirectImportDeliveryPlan,
   executeJiuyanDirectExport,
@@ -148,13 +149,14 @@ async function maybeHandleJiuyanFeishuDirectExport(params: {
   }
 
   params.log?.(`feishu[${params.accountId ?? "default"}]: handling Jiuyan export directly`);
+  const startMessage = await buildJiuyanDirectExportStartMessagePreview({
+    messageText: params.messageText,
+    inputPaths,
+  });
   await sendMessageFeishu({
     cfg: params.cfg,
     to: `chat:${params.chatId}`,
-    text:
-      intent.prefix === "/AI生产计划"
-        ? "正在准备 AI 生产计划，完成后立刻会把结果文件发给你。"
-        : "正在准备生产计划，完成后立刻会把结果文件发给你。",
+    text: startMessage,
     accountId: params.accountId,
   });
   const result = await executeJiuyanDirectExport({
