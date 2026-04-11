@@ -263,4 +263,19 @@ describe("directive parsing", () => {
     expect(res.replyToId).toBe("msg-2");
     expect(res.cleaned).toBe("line 1\nline 2\n\nline 3");
   });
+
+  it("drops leaked think preamble before reply_to_current tags", () => {
+    const res = extractReplyToTag("think\ninternal notes[[reply_to_current]] Visible answer", "msg-1");
+    expect(res.replyToId).toBe("msg-1");
+    expect(res.cleaned).toBe("Visible answer");
+  });
+
+  it("keeps only the visible reply when leaked think text precedes analysis replies", () => {
+    const res = extractReplyToTag(
+      "think\nTotal volume: 147k\n\nLet's reply with a structured analysis.\n4. 波动与建议 (Trend & Insights)[[reply_to_current]] 根据数据库中最近一周的最新销售数据。",
+      "msg-2",
+    );
+    expect(res.replyToId).toBe("msg-2");
+    expect(res.cleaned).toBe("根据数据库中最近一周的最新销售数据。");
+  });
 });
