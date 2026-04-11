@@ -302,7 +302,7 @@ export async function processOneMessage(
   if (isJiuyanDataOpsFile(finalized.MediaPath) && textBody.trim().length === 0) {
     await sendMessageWeixin({
       to: ctx.To,
-      text: "文件已收到。请继续发送 /生产计划 或 /更新数据，我会按文件内容继续处理。",
+      text: "文件已收到。请回复 /更新数据 开始导入，或回复 /生产计划 使用表中 SKU 生成生产计划。",
       opts: {
         baseUrl: deps.baseUrl,
         token: deps.token,
