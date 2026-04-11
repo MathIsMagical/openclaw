@@ -38,6 +38,36 @@ function isJiuyanDataOpsFile(mediaPath?: string): boolean {
   return Boolean(mediaPath && /\.(xlsx|xls|csv|zip)$/i.test(mediaPath));
 }
 
+const FINAL_BLOCK_RE = /<final\b[^>]*>([\s\S]*?)<\/final>/i;
+const INTERNAL_THINK_BLOCK_RE =
+  /<(?:think|thinking|thought)\b[^>]*>[\s\S]*?<\/(?:think|thinking|thought)>/gi;
+const FINAL_TAG_RE = /<\/?final\b[^>]*>/gi;
+const REPLY_TAG_RE = /\[\[\s*(?:reply_to_current|reply_to\s*:[^\]\n]+)\s*\]\]\s*/gi;
+
+function sanitizeVisibleReplyText(text: string): string {
+  let next = text;
+  const finalMatch = FINAL_BLOCK_RE.exec(next);
+  if (finalMatch) {
+    next = finalMatch[1] ?? "";
+  }
+
+  next = next.replace(INTERNAL_THINK_BLOCK_RE, "").replace(FINAL_TAG_RE, "");
+
+  let lastReplyTagEnd: number | undefined;
+  for (const match of next.matchAll(REPLY_TAG_RE)) {
+    lastReplyTagEnd = (match.index ?? 0) + match[0].length;
+  }
+  if (lastReplyTagEnd !== undefined) {
+    // If the model leaks scratch text before the reply directive, only send
+    // the user-visible answer after the directive.
+    next = next.slice(lastReplyTagEnd);
+  } else {
+    next = next.replace(REPLY_TAG_RE, "");
+  }
+
+  return next.trim();
+}
+
 /** Dependencies for processOneMessage, injected by the monitor loop. */
 export type ProcessMessageDeps = {
   accountId: string;
@@ -355,7 +385,7 @@ export async function processOneMessage(
       humanDelay,
       typingCallbacks,
       deliver: async (payload) => {
-        const text = markdownToPlainText(payload.text ?? "");
+        const text = markdownToPlainText(sanitizeVisibleReplyText(payload.text ?? ""));
         const mediaUrl = payload.mediaUrl ?? payload.mediaUrls?.[0];
         logger.debug(`outbound payload: ${redactBody(JSON.stringify(payload))}`);
         logger.info(

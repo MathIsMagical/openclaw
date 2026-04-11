@@ -4,6 +4,34 @@ import { log } from "../logger.js";
 const SESSIONS_YIELD_INTERRUPT_CUSTOM_TYPE = "openclaw.sessions_yield_interrupt";
 const SESSIONS_YIELD_CONTEXT_CUSTOM_TYPE = "openclaw.sessions_yield";
 const SESSIONS_YIELD_ABORT_SETTLE_TIMEOUT_MS = process.env.OPENCLAW_TEST_FAST === "1" ? 250 : 2_000;
+const FINAL_BLOCK_RE = /<final\b[^>]*>([\s\S]*?)<\/final>/i;
+const INTERNAL_THINK_BLOCK_RE =
+  /<(?:think|thinking|thought)\b[^>]*>[\s\S]*?<\/(?:think|thinking|thought)>/gi;
+const FINAL_TAG_RE = /<\/?final\b[^>]*>/gi;
+const REPLY_TAG_RE = /\[\[\s*(?:reply_to_current|reply_to\s*:[^\]\n]+)\s*\]\]\s*/gi;
+
+export function resolveVisibleSessionsYieldReply(message: string | null | undefined):
+  | string
+  | undefined {
+  if (!message || !FINAL_BLOCK_RE.test(message)) {
+    return undefined;
+  }
+  const finalMatch = FINAL_BLOCK_RE.exec(message);
+  let text = finalMatch?.[1] ?? "";
+  text = text.replace(INTERNAL_THINK_BLOCK_RE, "").replace(FINAL_TAG_RE, "");
+
+  let lastReplyTagEnd: number | undefined;
+  for (const match of text.matchAll(REPLY_TAG_RE)) {
+    lastReplyTagEnd = (match.index ?? 0) + match[0].length;
+  }
+  text =
+    lastReplyTagEnd !== undefined
+      ? text.slice(lastReplyTagEnd)
+      : text.replace(REPLY_TAG_RE, "");
+
+  const trimmed = text.trim();
+  return trimmed || undefined;
+}
 
 // Persist a hidden context reminder so the next turn knows why the runner stopped.
 export function buildSessionsYieldContextMessage(message: string): string {

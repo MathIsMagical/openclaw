@@ -207,6 +207,7 @@ import {
   createYieldAbortedResponse,
   persistSessionsYieldContextMessage,
   queueSessionsYieldInterruptMessage,
+  resolveVisibleSessionsYieldReply,
   stripSessionsYieldArtifacts,
   waitForSessionsYieldAbortSettle,
 } from "./attempt.sessions-yield.js";
@@ -271,6 +272,7 @@ export {
   buildSessionsYieldContextMessage,
   persistSessionsYieldContextMessage,
   queueSessionsYieldInterruptMessage,
+  resolveVisibleSessionsYieldReply,
   stripSessionsYieldArtifacts,
 } from "./attempt.sessions-yield.js";
 export {
@@ -2181,6 +2183,16 @@ export async function runEmbeddedAttempt(
             });
             stripSessionsYieldArtifacts(activeSession);
             if (yieldMessage) {
+              const visibleYieldReply = resolveVisibleSessionsYieldReply(yieldMessage);
+              if (visibleYieldReply && params.onBlockReply) {
+                try {
+                  await params.onBlockReply({ text: visibleYieldReply });
+                } catch (replyErr) {
+                  log.warn(
+                    `sessions_yield visible reply delivery failed: runId=${params.runId} sessionId=${params.sessionId} err=${String(replyErr)}`,
+                  );
+                }
+              }
               await persistSessionsYieldContextMessage(activeSession, yieldMessage);
             }
           } else {

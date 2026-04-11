@@ -265,6 +265,40 @@ describe("createFeishuReplyDispatcher streaming behavior", () => {
     expect(sendMarkdownCardFeishuMock).not.toHaveBeenCalled();
   });
 
+  it("strips leaked think preamble before reply tag from final text", async () => {
+    const { options } = createDispatcherHarness();
+    await options.deliver(
+      {
+        text: 'think\nThe user just said "hi". I will say hi back.[[reply_to_current]] Hi there! How can I help?',
+      },
+      { kind: "final" },
+    );
+
+    expect(sendMessageFeishuMock).toHaveBeenCalledTimes(1);
+    expect(sendMessageFeishuMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: "Hi there! How can I help?",
+      }),
+    );
+  });
+
+  it("uses explicit final blocks and hides internal reply markers", async () => {
+    const { options } = createDispatcherHarness();
+    await options.deliver(
+      {
+        text: "<think>draft reasoning</think><final>[[reply_to_current]]好的，我在。</final>",
+      },
+      { kind: "final" },
+    );
+
+    expect(sendMessageFeishuMock).toHaveBeenCalledTimes(1);
+    expect(sendMessageFeishuMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: "好的，我在。",
+      }),
+    );
+  });
+
   it("suppresses internal block payload delivery", async () => {
     const { options } = createDispatcherHarness();
     await options.deliver({ text: "internal reasoning chunk" }, { kind: "block" });

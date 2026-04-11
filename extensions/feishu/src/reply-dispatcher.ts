@@ -28,6 +28,36 @@ function shouldUseCard(text: string): boolean {
   return /```[\s\S]*?```/.test(text) || /\|.+\|[\r\n]+\|[-:| ]+\|/.test(text);
 }
 
+const FINAL_BLOCK_RE = /<final\b[^>]*>([\s\S]*?)<\/final>/i;
+const INTERNAL_THINK_BLOCK_RE =
+  /<(?:think|thinking|thought)\b[^>]*>[\s\S]*?<\/(?:think|thinking|thought)>/gi;
+const FINAL_TAG_RE = /<\/?final\b[^>]*>/gi;
+const REPLY_TAG_RE = /\[\[\s*(?:reply_to_current|reply_to\s*:[^\]\n]+)\s*\]\]\s*/gi;
+
+function sanitizeVisibleReplyText(text: string): string {
+  let next = text;
+  const finalMatch = FINAL_BLOCK_RE.exec(next);
+  if (finalMatch) {
+    next = finalMatch[1] ?? "";
+  }
+
+  next = next.replace(INTERNAL_THINK_BLOCK_RE, "").replace(FINAL_TAG_RE, "");
+
+  let lastReplyTagEnd: number | undefined;
+  for (const match of next.matchAll(REPLY_TAG_RE)) {
+    lastReplyTagEnd = (match.index ?? 0) + match[0].length;
+  }
+  if (lastReplyTagEnd !== undefined) {
+    // When an agent leaks a hidden preamble before [[reply_to_current]], keep
+    // only the user-visible answer that follows the reply directive.
+    next = next.slice(lastReplyTagEnd);
+  } else {
+    next = next.replace(REPLY_TAG_RE, "");
+  }
+
+  return next.trim();
+}
+
 /** Maximum age (ms) for a message to receive a typing indicator reaction.
  * Messages older than this are likely replays after context compaction (#30418). */
 const TYPING_INDICATOR_MAX_AGE_MS = 2 * 60_000;
@@ -373,7 +403,10 @@ export function createFeishuReplyDispatcher(params: CreateFeishuReplyDispatcherP
         await typingCallbacks?.onReplyStart?.();
       },
       deliver: async (payload: ReplyPayload, info) => {
-        const reply = resolveSendableOutboundReplyParts(payload);
+        const reply = resolveSendableOutboundReplyParts(payload, {
+          text:
+            typeof payload.text === "string" ? sanitizeVisibleReplyText(payload.text) : undefined,
+        });
         const text = reply.text;
         const hasText = reply.hasText;
         const hasMedia = reply.hasMedia;
