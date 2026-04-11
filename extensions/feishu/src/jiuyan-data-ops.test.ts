@@ -209,11 +209,14 @@ describe("maybeHandleJiuyanFeishuDirectOps", () => {
     ).resolves.toBe(true);
   });
 
-  it("ignores non-command spreadsheet uploads so agent dispatch can continue", async () => {
+  it("intercepts standalone Jiuyan file uploads before agent dispatch", async () => {
     await expect(
       maybeHandleJiuyanFeishuDirectOps({
         cfg: {} as never,
-        messageText: "Q1-sales.csv",
+        messageText: JSON.stringify({
+          file_key: "file_v3_001",
+          file_name: "Q1-sales.csv",
+        }),
         chatId: "oc_test_chat",
         replyToMessageId: "om_test_msg",
         replyInThread: false,
@@ -223,7 +226,12 @@ describe("maybeHandleJiuyanFeishuDirectOps", () => {
           } as never,
         ],
       }),
-    ).resolves.toBe(false);
+    ).resolves.toBe(true);
+
+    const messages = vi.mocked(sendMessageFeishu).mock.calls.map((call) => call[0]?.text);
+    expect(messages).toEqual([
+      "文件已收到。请回复 /更新数据 开始导入，或回复 /生产计划 使用表中 SKU 生成生产计划。",
+    ]);
   });
 
   it("sends an immediate import start message when input files are present", async () => {

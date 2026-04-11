@@ -10,6 +10,7 @@ import {
   buildJiuyanDirectImportDeliveryPlan,
   executeJiuyanDirectExport,
   executeJiuyanDirectImport,
+  isJiuyanImportInputPath,
   isJiuyanScopeInputPath,
   JIUYAN_EXPORTS_DIR,
   TIMESFM_OUTPUTS_DIR,
@@ -24,6 +25,33 @@ function collectInputPaths(
   quotedMediaList?: readonly FeishuMediaInfo[],
 ): string[] {
   return [...mediaList, ...(quotedMediaList ?? [])].map((media) => media.path);
+}
+
+function isStandaloneJiuyanFileMessage(
+  messageText: string,
+  mediaList: readonly FeishuMediaInfo[],
+): boolean {
+  if (mediaList.length === 0) {
+    return false;
+  }
+  if (!mediaList.some((media) => isJiuyanImportInputPath(media.path))) {
+    return false;
+  }
+
+  const trimmed = messageText.trim();
+  if (!trimmed) {
+    return true;
+  }
+  if (/\.(xlsx|xls|csv|zip)$/i.test(trimmed)) {
+    return true;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as { file_key?: unknown; file_name?: unknown };
+    return typeof parsed.file_key === "string" && typeof parsed.file_name === "string";
+  } catch {
+    return false;
+  }
 }
 
 async function sendJiuyanFeishuDeliveryPlan(
@@ -196,6 +224,18 @@ export async function maybeHandleJiuyanFeishuDirectOps(params: {
 }): Promise<boolean> {
   if (params.commandAuthorizationConfigured && params.commandAuthorized === false) {
     return false;
+  }
+  if (isStandaloneJiuyanFileMessage(params.messageText, params.mediaList)) {
+    await sendMessageFeishu({
+      cfg: params.cfg,
+      to: `chat:${params.chatId}`,
+      text: "文件已收到。请回复 /更新数据 开始导入，或回复 /生产计划 使用表中 SKU 生成生产计划。",
+      replyToMessageId: params.replyToMessageId,
+      replyInThread: params.replyInThread,
+      accountId: params.accountId,
+    });
+    params.log?.(`feishu[${params.accountId ?? "default"}]: intercepted standalone Jiuyan file message`);
+    return true;
   }
   if (!hasJiuyanDirectOpsCommand(params.messageText)) {
     return false;

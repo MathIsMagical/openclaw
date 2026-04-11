@@ -179,7 +179,7 @@ export function isJiuyanScopeInputPath(filePath: string): boolean {
   return /\.(xlsx|xls|csv)$/i.test(filePath);
 }
 
-function isJiuyanImportInputPath(filePath: string): boolean {
+export function isJiuyanImportInputPath(filePath: string): boolean {
   return /\.(xlsx|xls|csv|zip)$/i.test(filePath);
 }
 
