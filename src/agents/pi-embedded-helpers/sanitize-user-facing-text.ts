@@ -310,7 +310,7 @@ function stripFinalTagsFromText(text: unknown): string {
 }
 
 function extractFinalTaggedContent(text: unknown): string | null {
-  const normalized = coerceText(text);
+  const normalized = coerceChatContentText(text);
   if (!normalized) {
     return null;
   }
