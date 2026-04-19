@@ -147,6 +147,46 @@ export function listPluginInvocationKeys(command: OpenClawPluginCommandDefinitio
   return [...keys];
 }
 
+export function resolveRegisteredPluginCommandInvocation(
+  commandBody: string,
+): { command: RegisteredPluginCommand; args?: string } | null {
+  const trimmed = commandBody.trim();
+  if (!trimmed.startsWith("/")) {
+    return null;
+  }
+
+  const spaceIndex = trimmed.indexOf(" ");
+  const commandName = spaceIndex === -1 ? trimmed : trimmed.slice(0, spaceIndex);
+  const args = spaceIndex === -1 ? undefined : trimmed.slice(spaceIndex + 1).trim();
+
+  const key = normalizeLowercaseStringOrEmpty(commandName);
+  const alternateKeys = [key];
+  if (key.includes("_")) {
+    alternateKeys.push(key.replace(/_/g, "-"));
+  }
+  if (key.includes("-")) {
+    alternateKeys.push(key.replace(/-/g, "_"));
+  }
+  const command =
+    alternateKeys
+      .map(
+        (candidateKey) =>
+          pluginCommands.get(candidateKey) ??
+          Array.from(pluginCommands.values()).find((candidate) =>
+            listPluginInvocationKeys(candidate).includes(candidateKey),
+          ),
+      )
+      .find(Boolean) ?? null;
+
+  if (!command) {
+    return null;
+  }
+  if (args && !command.acceptsArgs) {
+    return null;
+  }
+  return { command, args: args || undefined };
+}
+
 export function registerPluginCommand(
   pluginId: string,
   command: OpenClawPluginCommandDefinition,

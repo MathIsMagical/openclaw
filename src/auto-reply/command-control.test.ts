@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
+import { clearPluginCommands, registerPluginCommand } from "../plugins/commands.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { createOutboundTestPlugin, createTestRegistry } from "../test-utils/channel-plugins.js";
 import { resolveCommandAuthorization } from "./command-auth.js";
@@ -888,6 +889,47 @@ describe("control command parsing", () => {
     expect(hasControlCommand("/status please")).toBe(false);
     expect(hasControlCommand("prefix /send on")).toBe(false);
     expect(hasControlCommand("/send on")).toBe(true);
+  });
+
+  it("treats registered plugin slash commands as control commands", () => {
+    try {
+      clearPluginCommands();
+      expect(
+        registerPluginCommand("demo-news", {
+          name: "tencent-news",
+          description: "Search Tencent news",
+          acceptsArgs: true,
+          handler: async () => ({ text: "ok" }),
+        }),
+      ).toEqual({ ok: true });
+
+      expect(hasControlCommand("/tencent-news search NBA")).toBe(true);
+      expect(hasControlCommand("/tencent_news search NBA")).toBe(true);
+      expect(hasControlCommand("/tencent-news: search NBA")).toBe(true);
+      expect(hasControlCommand("hello /tencent-news search NBA")).toBe(false);
+      expect(hasControlCommand("/unknown-plugin search NBA")).toBe(false);
+    } finally {
+      clearPluginCommands();
+    }
+  });
+
+  it("does not treat plugin commands with unsupported args as control commands", () => {
+    try {
+      clearPluginCommands();
+      expect(
+        registerPluginCommand("demo-ping", {
+          name: "plugin-ping",
+          description: "Ping plugin",
+          acceptsArgs: false,
+          handler: async () => ({ text: "pong" }),
+        }),
+      ).toEqual({ ok: true });
+
+      expect(hasControlCommand("/plugin-ping")).toBe(true);
+      expect(hasControlCommand("/plugin-ping extra")).toBe(false);
+    } finally {
+      clearPluginCommands();
+    }
   });
 
   it("detects inline command tokens", () => {

@@ -1,4 +1,5 @@
 import type { OpenClawConfig } from "../config/types.js";
+import { resolveRegisteredPluginCommandInvocation } from "../plugins/command-registration.js";
 import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalLowercaseString,
@@ -48,7 +49,7 @@ export function hasControlCommand(
       }
     }
   }
-  return false;
+  return Boolean(resolveRegisteredPluginCommandInvocation(normalizedBody));
 }
 
 export function isControlCommandMessage(

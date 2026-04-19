@@ -8,14 +8,13 @@
 import { resolveConversationBindingContext } from "../channels/conversation-binding-context.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { logVerbose } from "../globals.js";
-import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import {
   clearPluginCommands,
   clearPluginCommandsForPlugin,
   getPluginCommandSpecs,
-  listPluginInvocationKeys,
   listProviderPluginCommandSpecs,
   registerPluginCommand,
+  resolveRegisteredPluginCommandInvocation,
   validateCommandName,
   validatePluginCommandDefinition,
 } from "./command-registration.js";
@@ -30,11 +29,7 @@ import {
   requestPluginConversationBinding,
 } from "./conversation-binding.js";
 import { getActivePluginChannelRegistry } from "./runtime.js";
-import type {
-  OpenClawPluginCommandDefinition,
-  PluginCommandContext,
-  PluginCommandResult,
-} from "./types.js";
+import type { PluginCommandContext, PluginCommandResult } from "./types.js";
 
 // Maximum allowed length for command arguments (defense in depth)
 const MAX_ARGS_LENGTH = 4096;
@@ -60,45 +55,7 @@ export {
 export function matchPluginCommand(
   commandBody: string,
 ): { command: RegisteredPluginCommand; args?: string } | null {
-  const trimmed = commandBody.trim();
-  if (!trimmed.startsWith("/")) {
-    return null;
-  }
-
-  // Extract command name and args
-  const spaceIndex = trimmed.indexOf(" ");
-  const commandName = spaceIndex === -1 ? trimmed : trimmed.slice(0, spaceIndex);
-  const args = spaceIndex === -1 ? undefined : trimmed.slice(spaceIndex + 1).trim();
-
-  const key = normalizeLowercaseStringOrEmpty(commandName);
-  const alternateKeys = [key];
-  if (key.includes("_")) {
-    alternateKeys.push(key.replace(/_/g, "-"));
-  }
-  if (key.includes("-")) {
-    alternateKeys.push(key.replace(/-/g, "_"));
-  }
-  const command =
-    alternateKeys
-      .map(
-        (candidateKey) =>
-          pluginCommands.get(candidateKey) ??
-          Array.from(pluginCommands.values()).find((candidate) =>
-            listPluginInvocationNames(candidate).includes(candidateKey),
-          ),
-      )
-      .find(Boolean) ?? null;
-
-  if (!command) {
-    return null;
-  }
-
-  // If command doesn't accept args but args were provided, don't match
-  if (args && !command.acceptsArgs) {
-    return null;
-  }
-
-  return { command, args: args || undefined };
+  return resolveRegisteredPluginCommandInvocation(commandBody);
 }
 
 /**
@@ -299,10 +256,6 @@ export function listPluginCommands(): Array<{
     pluginId: cmd.pluginId,
     acceptsArgs: cmd.acceptsArgs ?? false,
   }));
-}
-
-function listPluginInvocationNames(command: OpenClawPluginCommandDefinition): string[] {
-  return listPluginInvocationKeys(command);
 }
 
 export const __testing = {
