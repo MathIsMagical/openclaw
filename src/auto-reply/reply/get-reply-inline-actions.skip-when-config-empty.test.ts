@@ -8,13 +8,19 @@ import { stripInlineStatus } from "./reply-inline.js";
 import { buildTestCtx } from "./test-ctx.js";
 import type { TypingController } from "./typing.js";
 
-const { buildStatusReplyMock, createOpenClawToolsMock, getChannelPluginMock, handleCommandsMock } =
-  vi.hoisted(() => ({
-    buildStatusReplyMock: vi.fn(),
-    createOpenClawToolsMock: vi.fn(),
-    getChannelPluginMock: vi.fn(),
-    handleCommandsMock: vi.fn(),
-  }));
+const {
+  buildStatusReplyMock,
+  createOpenClawToolsMock,
+  getChannelPluginMock,
+  handleCommandsMock,
+  listSkillCommandsForWorkspaceMock,
+} = vi.hoisted(() => ({
+  buildStatusReplyMock: vi.fn(),
+  createOpenClawToolsMock: vi.fn(),
+  getChannelPluginMock: vi.fn(),
+  handleCommandsMock: vi.fn(),
+  listSkillCommandsForWorkspaceMock: vi.fn(),
+}));
 
 type HandleInlineActionsInput = Parameters<
   typeof import("./get-reply-inline-actions.js").handleInlineActions
@@ -27,6 +33,10 @@ vi.mock("./commands.runtime.js", () => ({
 
 vi.mock("../../agents/openclaw-tools.runtime.js", () => ({
   createOpenClawTools: (...args: unknown[]) => createOpenClawToolsMock(...args),
+}));
+
+vi.mock("../skill-commands.runtime.js", () => ({
+  listSkillCommandsForWorkspace: (...args: unknown[]) => listSkillCommandsForWorkspaceMock(...args),
 }));
 
 vi.mock("../../channels/plugins/index.js", () => ({
@@ -122,9 +132,11 @@ describe("handleInlineActions", () => {
     handleCommandsMock.mockResolvedValue({ shouldContinue: true, reply: undefined });
     getChannelPluginMock.mockReset();
     createOpenClawToolsMock.mockReset();
+    listSkillCommandsForWorkspaceMock.mockReset();
     buildStatusReplyMock.mockReset();
     buildStatusReplyMock.mockResolvedValue({ text: "status" });
     createOpenClawToolsMock.mockReturnValue([]);
+    listSkillCommandsForWorkspaceMock.mockReturnValue([]);
     getChannelPluginMock.mockImplementation((channelId?: string) =>
       channelId === "whatsapp"
         ? { commands: { skipWhenConfigEmpty: true } }
@@ -646,6 +658,64 @@ describe("handleInlineActions", () => {
       }),
     );
     expect(toolExecute).toHaveBeenCalled();
+  });
+
+  it("loads workspace skill commands when the preloaded command list is empty", async () => {
+    const typing = createTypingController();
+    const toolExecute = vi.fn(async () => ({ content: [{ type: "text", text: "news" }] }));
+    createOpenClawToolsMock.mockReturnValue([
+      {
+        name: "tencent_news",
+        execute: toolExecute,
+      },
+    ]);
+    listSkillCommandsForWorkspaceMock.mockReturnValue([
+      {
+        name: "tencent_news",
+        skillName: "tencent-news",
+        description: "Tencent News",
+        dispatch: {
+          kind: "tool",
+          toolName: "tencent_news",
+          argMode: "raw",
+        },
+      },
+    ]);
+
+    const ctx = buildTestCtx({
+      Body: "/tencent-news evening",
+      CommandBody: "/tencent-news evening",
+    });
+
+    const result = await handleInlineActions(
+      createHandleInlineActionsInput({
+        ctx,
+        typing,
+        cleanedBody: "/tencent-news evening",
+        command: {
+          isAuthorizedSender: true,
+          rawBodyNormalized: "/tencent-news evening",
+          commandBodyNormalized: "/tencent-news evening",
+        },
+        overrides: {
+          allowTextCommands: true,
+          cfg: { commands: { text: true } },
+          skillCommands: [],
+        },
+      }),
+    );
+
+    expect(result).toEqual({ kind: "reply", reply: { text: "news" } });
+    expect(listSkillCommandsForWorkspaceMock).toHaveBeenCalled();
+    expect(handleCommandsMock).not.toHaveBeenCalled();
+    expect(toolExecute).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        command: "evening",
+        commandName: "tencent_news",
+        skillName: "tencent-news",
+      }),
+    );
   });
 
   it("passes senderIsOwner into inline tool runtimes before owner-only filtering", async () => {
