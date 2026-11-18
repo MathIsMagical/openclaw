@@ -404,22 +404,19 @@ export type PluginHookInboundClaimResult = {
   reply?: ReplyPayload;
 };
 
-export type PluginHookBeforeDispatchEvent = {
+export type PluginHookBeforeDispatchEvent = Partial<PluginHookInboundClaimEvent> & {
   content: string;
+  /**
+   * Compatibility body field for before_dispatch. This is the agent-facing body
+   * when present, while raw/current body details remain available on metadata.
+   */
   body?: string;
   channel?: string;
-  sessionKey?: string;
-  senderId?: string;
   isGroup?: boolean;
-  timestamp?: number;
 };
 
-export type PluginHookBeforeDispatchContext = {
+export type PluginHookBeforeDispatchContext = Partial<PluginHookInboundClaimContext> & {
   channelId?: string;
-  accountId?: string;
-  conversationId?: string;
-  sessionKey?: string;
-  senderId?: string;
 };
 
 export type PluginHookBeforeDispatchResult = {

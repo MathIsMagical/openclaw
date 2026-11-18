@@ -85,6 +85,15 @@ const PERMISSION_ERROR_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 const groupNameCache = new Map<string, { name: string; expiresAt: number }>();
 const GROUP_NAME_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const GROUP_NAME_CACHE_MAX_SIZE = 500; // hard cap
+const FEISHU_MESSAGE_MEDIA_TYPES = new Set([
+  "image",
+  "file",
+  "audio",
+  "video",
+  "media",
+  "sticker",
+  "post",
+]);
 
 type FeishuGroupSessionScope = "group" | "group_sender" | "group_topic" | "group_topic_sender";
 
@@ -1010,6 +1019,7 @@ export async function handleFeishuMessage(params: {
     // Fetch quoted/replied message content if parentId exists
     let quotedMessageInfo: Awaited<ReturnType<typeof getMessageFeishu>> = null;
     let quotedContent: string | undefined;
+    let quotedMediaList: FeishuMediaInfo[] = [];
     if (ctx.parentId) {
       try {
         quotedMessageInfo = await getMessageFeishu({
@@ -1035,6 +1045,22 @@ export async function handleFeishuMessage(params: {
           log(
             `feishu[${account.accountId}]: fetched quoted message: ${quotedContent?.slice(0, 100)}`,
           );
+          // Quoted media arrives as a message reference only; hydrate it here so
+          // follow-up commands receive the same MediaPaths as direct uploads.
+          if (
+            quotedMessageInfo.rawContent &&
+            FEISHU_MESSAGE_MEDIA_TYPES.has(quotedMessageInfo.contentType)
+          ) {
+            quotedMediaList = await resolveFeishuMediaList({
+              cfg,
+              messageId: quotedMessageInfo.messageId,
+              messageType: quotedMessageInfo.contentType,
+              content: quotedMessageInfo.rawContent,
+              maxBytes: mediaMaxBytes,
+              log,
+              accountId: account.accountId,
+            });
+          }
         } else if (quotedMessageInfo) {
           log(
             `feishu[${account.accountId}]: skipped quoted message from sender ${quotedMessageInfo.senderId ?? "unknown"} (mode=${contextVisibilityMode})`,
@@ -1057,6 +1083,14 @@ export async function handleFeishuMessage(params: {
       permissionErrorForAgent,
       botOpenId,
     });
+    const agentMediaList =
+      quotedMediaList.length > 0 ? [...mediaList, ...quotedMediaList] : mediaList;
+    const inboundMediaForAgent =
+      quotedMediaList.length > 0
+        ? toInboundMediaFacts(agentMediaList, {
+            transcribed: (_media, index) => index === preflightAudioIndex,
+          })
+        : inboundMedia;
     const envelopeFrom = isGroup ? `${ctx.chatId}:${ctx.senderOpenId}` : ctx.senderOpenId;
     if (permissionErrorForAgent) {
       // Keep the notice in a single dispatch to avoid duplicate replies (#27372).
@@ -1301,7 +1335,7 @@ export async function handleFeishuMessage(params: {
             ? normalizeOptionalString(groupConfig?.systemPrompt)
             : undefined,
         },
-        media: inboundMedia,
+        media: inboundMediaForAgent,
         messageId: ctx.messageId,
         timestamp: messageCreateTimeMs,
         from: feishuFrom,

@@ -72,6 +72,7 @@ export type FeishuMessageInfo = {
   senderType?: string;
   content: string;
   contentType: string;
+  rawContent?: string;
   createTime?: number;
   /** Feishu thread ID (omt_xxx) — present when the message belongs to a topic thread. */
   threadId?: string;

@@ -379,6 +379,7 @@ function parseFeishuMessageItem(
     senderType: item.sender?.sender_type,
     content: parseFeishuMessageContent(rawContent, msgType),
     contentType: msgType,
+    rawContent,
     createTime: parseStrictNonNegativeInteger(item.create_time),
     threadId: item.thread_id || undefined,
   };

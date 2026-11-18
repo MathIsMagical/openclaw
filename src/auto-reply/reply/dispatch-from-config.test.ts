@@ -6450,9 +6450,15 @@ describe("before_dispatch hook", () => {
       OriginatingTo: "telegram:999",
       From: "signal:group:ops-room",
       SenderId: "signal:user:alice",
+      AccountId: "acct-main",
       GroupChannel: "ops-room",
       ChatType: "direct",
       Timestamp: 123,
+      MessageSid: "msg-123",
+      MessageThreadId: "thread-456",
+      MediaPath: "/tmp/report.xlsx",
+      MediaPaths: ["/tmp/report.xlsx"],
+      MediaTypes: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
     });
 
     const result = await dispatchReplyFromConfig({ ctx, cfg: emptyConfig, dispatcher });
@@ -6465,21 +6471,39 @@ describe("before_dispatch hook", () => {
           {
             body?: unknown;
             channel?: unknown;
+            conversationId?: unknown;
             content?: unknown;
             isGroup?: unknown;
+            messageId?: unknown;
+            metadata?: Record<string, unknown>;
             senderId?: unknown;
+            threadId?: unknown;
             timestamp?: unknown;
           },
-          { channelId?: unknown; senderId?: unknown },
+          {
+            accountId?: unknown;
+            channelId?: unknown;
+            conversationId?: unknown;
+            messageId?: unknown;
+            senderId?: unknown;
+          },
         ]
       | undefined;
     expect(beforeDispatchCall?.[0]?.content).toBe("command body");
     expect(beforeDispatchCall?.[0]?.body).toBe("agent body");
     expect(beforeDispatchCall?.[0]?.channel).toBe("telegram");
+    expect(beforeDispatchCall?.[0]?.conversationId).toBe(beforeDispatchCall?.[1]?.conversationId);
+    expect(beforeDispatchCall?.[0]?.messageId).toBe("msg-123");
     expect(beforeDispatchCall?.[0]?.senderId).toBe("signal:user:alice");
+    expect(beforeDispatchCall?.[0]?.threadId).toBe("thread-456");
     expect(beforeDispatchCall?.[0]?.isGroup).toBe(true);
     expect(beforeDispatchCall?.[0]?.timestamp).toBe(123);
+    expect(beforeDispatchCall?.[0]?.metadata?.mediaPath).toBe("/tmp/report.xlsx");
+    expect(beforeDispatchCall?.[0]?.metadata?.mediaPaths).toEqual(["/tmp/report.xlsx"]);
     expect(beforeDispatchCall?.[1]?.channelId).toBe("telegram");
+    expect(beforeDispatchCall?.[1]?.accountId).toBe("acct-main");
+    expect(beforeDispatchCall?.[1]?.conversationId).toBeTruthy();
+    expect(beforeDispatchCall?.[1]?.messageId).toBe("msg-123");
     expect(beforeDispatchCall?.[1]?.senderId).toBe("signal:user:alice");
     expect(dispatcher.sendFinalReply).not.toHaveBeenCalled();
     const routeCall = firstRouteReplyCall() as

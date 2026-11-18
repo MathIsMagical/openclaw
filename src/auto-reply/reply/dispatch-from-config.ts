@@ -1978,20 +1978,13 @@ export async function dispatchReplyFromConfig(
         runWithDispatchAbortSignal(getPreDispatchAbortSignal(), () =>
           hookRunner.runBeforeDispatch(
             {
-              content: hookContext.content,
+              ...inboundClaimEvent,
               body: hookContext.bodyForAgent ?? hookContext.body,
-              channel: hookContext.channelId,
               sessionKey: sessionStoreEntry.sessionKey ?? sessionKey,
-              senderId: hookContext.senderId,
-              isGroup: hookContext.isGroup,
-              timestamp: hookContext.timestamp,
             },
             {
-              channelId: hookContext.channelId,
-              accountId: hookContext.accountId,
-              conversationId: inboundClaimContext.conversationId,
+              ...inboundClaimContext,
               sessionKey: sessionStoreEntry.sessionKey ?? sessionKey,
-              senderId: hookContext.senderId,
             },
           ),
         ),

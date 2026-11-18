@@ -1244,6 +1244,76 @@ describe("handleFeishuMessage command authorization", () => {
     expect(context.SupplementalContext?.quote?.body).toBe("quoted content");
   });
 
+  it("hydrates quoted file messages into inbound media for follow-up commands", async () => {
+    mockDownloadMessageResourceFeishu.mockResolvedValueOnce({
+      buffer: Buffer.from("xlsx"),
+      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      fileName: "更新数据.xlsx",
+    });
+    mockSaveMediaBuffer.mockResolvedValueOnce({
+      id: "inbound-update.xlsx",
+      path: "/tmp/inbound-update.xlsx",
+      size: Buffer.byteLength("xlsx"),
+      contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    mockGetMessageFeishu.mockResolvedValueOnce({
+      messageId: "om_parent_file",
+      chatId: "oc-dm",
+      content: "[file message]",
+      contentType: "file",
+      rawContent: JSON.stringify({
+        file_key: "file_v3_excel",
+        file_name: "更新数据.xlsx",
+      }),
+    });
+
+    const cfg: ClawdbotConfig = {
+      channels: {
+        feishu: {
+          enabled: true,
+          dmPolicy: "open",
+        },
+      },
+    } as ClawdbotConfig;
+
+    const event: FeishuMessageEvent = {
+      sender: {
+        sender_id: {
+          open_id: "ou-replier",
+        },
+      },
+      message: {
+        message_id: "om_update_command",
+        parent_id: "om_parent_file",
+        chat_id: "oc-dm",
+        chat_type: "p2p",
+        message_type: "text",
+        content: JSON.stringify({ text: "/更新数据" }),
+      },
+    };
+
+    await dispatchMessage({ cfg, event });
+
+    expect(mockDownloadMessageResourceFeishu).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageId: "om_parent_file",
+        fileKey: "file_v3_excel",
+        type: "file",
+        originalFilename: "更新数据.xlsx",
+      }),
+    );
+    const context = mockCallArg<{
+      MediaPaths?: string[];
+      MediaTypes?: string[];
+      SupplementalContext?: { quote?: { body?: string } };
+    }>(mockFinalizeInboundContext, 0, 0);
+    expect(context.SupplementalContext?.quote?.body).toBe("[file message]");
+    expect(context.MediaPaths).toEqual(["/tmp/inbound-update.xlsx"]);
+    expect(context.MediaTypes).toEqual([
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ]);
+  });
+
   it("uses message create_time as Timestamp instead of Date.now()", async () => {
     mockShouldComputeCommandAuthorized.mockReturnValue(false);
 
